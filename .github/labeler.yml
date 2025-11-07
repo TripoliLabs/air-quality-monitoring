@@ -1,0 +1,44 @@
+# Auto-label PRs based on changed files
+
+firmware:
+  - changed-files:
+    - any-glob-to-any-file: 'firmware/**/*'
+
+backend:
+  - changed-files:
+    - any-glob-to-any-file: 'backend/**/*'
+
+frontend:
+  - changed-files:
+    - any-glob-to-any-file: 'frontend/**/*'
+
+database:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'backend/database/**/*'
+      - '**/*.sql'
+
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**/*'
+      - '**/*.md'
+
+hardware:
+  - changed-files:
+    - any-glob-to-any-file: 'hardware/**/*'
+
+gateway:
+  - changed-files:
+    - any-glob-to-any-file: 'gateway/**/*'
+
+infrastructure:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docker-compose*.yml'
+      - '**/Dockerfile'
+      - '.github/**/*'
+
+monitoring:
+  - changed-files:
+    - any-glob-to-any-file: 'monitoring/**/*'
