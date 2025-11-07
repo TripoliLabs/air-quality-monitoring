@@ -283,28 +283,28 @@ See `docs/getting-started/` for detailed guides on:
 
 | Component | Cost (USD) |
 |-----------|------------|
-| ESP32 + LoRa module | $25-35 |
-| PMS5003 PM sensor | $15-20 |
-| BME280 temp/humidity | $5-8 |
-| Solar panel (40W) | $50-70 |
-| LiFePO4 battery (12V 30Ah) | $60-90 |
-| Enclosure + mounting | $60-90 |
-| **Total per node** | **$260-350** |
+| ESP32 + LoRa module | TBD |
+| PMS5003 PM sensor | TBD |
+| BME280 temp/humidity | TBD |
+| Solar panel (40W) | TBD |
+| LiFePO4 battery (12V 30Ah) | TBD |
+| Enclosure + mounting | TBD |
+| **Total per node** | **TBD** |
 
 ### Network Infrastructure
 
 | Item | Cost |
 |------|------|
-| LoRa Gateway (RAK7258) | $300-400 each (need 3-5) |
+| LoRa Gateway (RAK7258) | TBD |
 | DigitalOcean hosting | $24/month |
 | Domain name | $12/year |
 | **Total monthly** | **~$25-30** |
 
 ### Deployment Examples
 
-- **Pilot (10 sensors):** ~$3,500 one-time + $30/month
-- **Neighborhood (50 sensors):** ~$16,000 one-time + $30/month
-- **City-scale (200 sensors):** ~$60,000 one-time + $30/month
+- **Pilot (10 sensors):** ~TBD one-time + $30/month
+- **Neighborhood (50 sensors):** ~TBD one-time + $30/month
+- **City-scale (200 sensors):** ~TBD one-time + $30/month
 
 **Note:** With cloud provider nonprofit credits (AWS, DigitalOcean), hosting can be $0/month for first 1-2 years.
 
