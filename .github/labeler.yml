@@ -1,4 +1,4 @@
-# Auto-label PRs based on changed files
+# Auto-label PRs based on changed files!
 
 firmware:
   - changed-files:
