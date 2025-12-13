@@ -18,11 +18,11 @@ Open-source distributed air quality monitoring system using solar-powered LoRaWA
 
 <div align="center">
 
-| Firmware | Network | Backend | Database | Frontend | Infrastructure |
-|----------|---------|---------|----------|----------|----------------|
-| ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white) | ![LoRaWAN](https://img.shields.io/badge/LoRaWAN-00A9CE?style=for-the-badge&logo=lora&logoColor=white) | ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white) | ![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black) | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white) |
-| ![Arduino](https://img.shields.io/badge/Arduino-00979D?style=for-the-badge&logo=arduino&logoColor=white) | ![EMQX](https://img.shields.io/badge/EMQX-00B173?style=for-the-badge&logo=emqx&logoColor=white) | ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white) | ![TimescaleDB](https://img.shields.io/badge/TimescaleDB-FDB515?style=for-the-badge&logo=timescale&logoColor=black) | ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) | ![DigitalOcean](https://img.shields.io/badge/DigitalOcean-0080FF?style=for-the-badge&logo=digitalocean&logoColor=white) |
-| ![ESP32](https://img.shields.io/badge/ESP32-E7352C?style=for-the-badge&logo=espressif&logoColor=white) | ![ChirpStack](https://img.shields.io/badge/ChirpStack-00A8E1?style=for-the-badge&logo=chirpstack&logoColor=white) | | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white) | ![Mapbox](https://img.shields.io/badge/Mapbox-000000?style=for-the-badge&logo=mapbox&logoColor=white) | ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white) |
+| Firmware | Network | Backend | Database | Frontend | Tooling |
+|----------|---------|---------|----------|----------|---------|
+| ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white) | ![LoRaWAN](https://img.shields.io/badge/LoRaWAN-00A9CE?style=for-the-badge&logo=lora&logoColor=white) | ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white) | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white) | ![Vue.js](https://img.shields.io/badge/Vue.js-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white) | ![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white) |
+| ![ESP-IDF](https://img.shields.io/badge/ESP--IDF-E7352C?style=for-the-badge&logo=espressif&logoColor=white) | ![EMQX](https://img.shields.io/badge/EMQX-00B173?style=for-the-badge&logo=emqx&logoColor=white) | ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) | ![TimescaleDB](https://img.shields.io/badge/TimescaleDB-FDB515?style=for-the-badge&logo=timescale&logoColor=black) | ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white) | ![Biome](https://img.shields.io/badge/Biome-60A5FA?style=for-the-badge&logo=biome&logoColor=white) |
+| ![PlatformIO](https://img.shields.io/badge/PlatformIO-F5822A?style=for-the-badge&logo=platformio&logoColor=white) | ![ChirpStack](https://img.shields.io/badge/ChirpStack-00A8E1?style=for-the-badge&logo=chirpstack&logoColor=white) | | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white) | ![MapLibre](https://img.shields.io/badge/MapLibre-396CB2?style=for-the-badge&logo=maplibre&logoColor=white) | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white) |
 
 </div>
 
@@ -100,7 +100,7 @@ Lebanon faces severe air quality challenges from:
          │
 ┌────────▼────────┐
 │  LoRa Gateways  │  3-5 gateways cover entire city
-│  (RAK7258)      │  Forward packets to network server
+│  (RAK7268)      │  Forward packets to network server
 └────────┬────────┘
          │ Internet (UDP/MQTT)
          │
@@ -112,7 +112,7 @@ Lebanon faces severe air quality challenges from:
 │  └──────────────┬───────────────────────────┘  │
 │                 │                                │
 │  ┌──────────────▼───────────────────────────┐  │
-│  │  Python Ingestion Service                │  │
+│  │  NestJS Ingestion Service                │  │
 │  │  Processes data, calculates AQI          │  │
 │  └──────────────┬───────────────────────────┘  │
 │                 │                                │
@@ -124,11 +124,11 @@ Lebanon faces severe air quality challenges from:
 │  └────┬────────┘    └──────┬──────┘            │
 │       │                    │                     │
 │  ┌────▼────────────────────▼──────┐            │
-│  │  FastAPI (REST API)            │            │
+│  │  NestJS (REST API)             │            │
 │  └────┬───────────────────────────┘            │
 │       │                                          │
 │  ┌────▼──────────┐  ┌────────────────┐        │
-│  │ React         │  │ Grafana        │        │
+│  │ Vue.js        │  │ Grafana        │        │
 │  │ Dashboard     │  │ Monitoring     │        │
 │  └───────────────┘  └────────────────┘        │
 └─────────────────────────────────────────────────┘
@@ -136,17 +136,22 @@ Lebanon faces severe air quality challenges from:
 
 ### Tech Stack Rationale
 
-| Component | Technology | Why |
-|-----------|-----------|-----|
-| **Firmware** | C++ + Arduino | Battery efficiency, proven at scale |
-| **Network Server** | ChirpStack | Open source LoRaWAN, works offline |
-| **Message Broker** | EMQX Serverless | Free tier, scalable, cloud-native MQTT |
-| **Backend** | Python + FastAPI | Fast, async, auto-generated docs |
-| **Database** | TimescaleDB | 100x compression, perfect for time-series |
-| **Cache** | Redis | Sub-millisecond reads |
-| **Frontend** | React + TypeScript | Modern, type-safe, great ecosystem |
-| **Maps** | Mapbox GL JS | WebGL-accelerated, beautiful |
-| **Hosting** | DigitalOcean | $24/month covers everything |
+| Component | Technology | Version | Why |
+|-----------|-----------|---------|-----|
+| **Runtime** | Node.js | 24+ LTS | Long-term support, stable for production |
+| **Package Manager** | Bun | 1.x | 7x faster than npm, all-in-one JS runtime |
+| **Linting/Formatting** | Biome | 2.0+ | 30x faster than ESLint+Prettier, type-aware |
+| **Firmware** | C++ + ESP-IDF | 5.x | Battery efficiency, ULP coprocessor support, proven at scale |
+| **Network Server** | ChirpStack | 4.x | Open source LoRaWAN, works offline |
+| **Message Broker** | EMQX Serverless | - | Free tier, scalable, cloud-native MQTT |
+| **Backend** | NestJS | 11+ | Type-safe, modular architecture, great DX |
+| **Language** | TypeScript | 5.9+ | Type safety, excellent tooling |
+| **Database** | TimescaleDB | 2.x | 100x compression, perfect for time-series |
+| **Cache** | Redis | 7.x | Sub-millisecond reads |
+| **Frontend** | Vue.js | 3.5+ | Lightweight, reactive, intuitive API |
+| **Build Tool** | Vite | 7+ | Fast HMR, optimized builds |
+| **Maps** | MapLibre GL JS | 4+ | Open source, no API keys, WebGL-accelerated |
+| **Hosting** | DigitalOcean | - | $24/month covers everything |
 
 ---
 
@@ -157,22 +162,26 @@ air-quality-monitoring/
 ├── firmware/              # ESP32 sensor firmware (C++)
 │   ├── src/
 │   │   ├── main.cpp
-│   │   ├── sensors/      # PMS5003, BME280 drivers
+│   │   ├── sensors/      # PMS7003, BME280 drivers
 │   │   ├── lora/         # LoRaWAN communication
 │   │   └── power/        # Deep sleep management
 │   └── platformio.ini
 │
-├── backend/              # Python services
-│   ├── ingestion/       # MQTT → Database pipeline
-│   ├── api/             # FastAPI REST API
-│   └── database/        # SQL schemas, migrations
+├── backend/              # NestJS services (TypeScript)
+│   ├── src/
+│   │   ├── ingestion/   # MQTT → Database pipeline
+│   │   ├── api/         # REST API modules
+│   │   ├── database/    # TypeORM entities, migrations
+│   │   └── common/      # Shared utilities, DTOs
+│   └── package.json
 │
-├── frontend/            # React web dashboard
+├── frontend/            # Vue.js web dashboard
 │   ├── src/
 │   │   ├── components/  # Map, Charts, Widgets
-│   │   ├── pages/       # Home, Sensor Detail, About
+│   │   ├── views/       # Home, Sensor Detail, About
 │   │   └── i18n/        # Arabic + English translations
-│   └── package.json
+│   ├── package.json
+│   └── vite.config.ts
 │
 ├── gateway/             # LoRaWAN gateway setup
 │   └── chirpstack/      # ChirpStack configuration
@@ -201,16 +210,16 @@ air-quality-monitoring/
 ### Prerequisites
 
 **Hardware (for sensor development):**
-- ESP32 board with LoRa (e.g., Heltec LoRa32 V3)
-- PMS5003 PM sensor
-- BME280 temperature/humidity sensor
+- LILYGO T-Beam V1.2 868MHz (ESP32 + LoRa + GPS + OLED)
+- PMS7003 PM sensor (Plantower)
+- BME280 temperature/humidity/pressure sensor
 - Jumper wires and breadboard
 
 **Software:**
 - [PlatformIO](https://platformio.org/) (for firmware)
-- [Docker](https://www.docker.com/) (for backend)
-- [Node.js 18+](https://nodejs.org/) (for frontend)
-- [Python 3.12+](https://www.python.org/) (for backend services)
+- [Docker](https://www.docker.com/) (for services)
+- [Bun](https://bun.sh/) (package manager & runtime, 7x faster than npm)
+- [Node.js 24+](https://nodejs.org/) (LTS - fallback runtime)
 
 ### Quick Start (Development)
 
@@ -240,26 +249,30 @@ This starts:
 
 **4. Run the API:**
 ```bash
-cd backend/api
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-pip install -r requirements.txt
-uvicorn main:app --reload
+cd backend
+bun install
+bun run start:dev
 ```
 
-API now available at http://localhost:8000
-- Docs: http://localhost:8000/docs
+API now available at http://localhost:3000
+- Docs: http://localhost:3000/api (Swagger)
 
 **5. Run the frontend:**
 ```bash
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Dashboard now available at http://localhost:5173
 
-**6. Flash firmware to ESP32:**
+**6. Lint and format code:**
+```bash
+bunx biome check --write .    # Fix all issues
+bunx biome check .            # Check only
+```
+
+**7. Flash firmware to ESP32:**
 ```bash
 cd firmware
 pio run --target upload
@@ -283,28 +296,30 @@ See `docs/getting-started/` for detailed guides on:
 
 | Component | Cost (USD) |
 |-----------|------------|
-| ESP32 + LoRa module | TBD |
-| PMS5003 PM sensor | TBD |
-| BME280 temp/humidity | TBD |
-| Solar panel (40W) | TBD |
-| LiFePO4 battery (12V 30Ah) | TBD |
-| Enclosure + mounting | TBD |
-| **Total per node** | **TBD** |
+| LILYGO T-Beam V1.2 868MHz (ESP32 + LoRa + GPS + OLED) | $29-32 |
+| PMS7003 PM sensor (Plantower) | $11.50-12 |
+| BME280 temp/humidity/pressure | $2.50-3 |
+| 5V 2W USB Solar Panel | $3-5 |
+| Samsung INR18650-30Q 3000mAh Battery | $2.90-3.10 |
+| TP4056 Type-C charging module | $0.20-0.50 |
+| SZOMK IP67 Waterproof Enclosure | $3-5 |
+| Cable glands + wiring | $3-5 |
+| **Total per node** | **~$56-65** |
 
 ### Network Infrastructure
 
 | Item | Cost |
 |------|------|
-| LoRa Gateway (RAK7258) | TBD |
+| RAK7268 WisGate Edge Lite 2 (8-ch gateway) | $139-180 |
 | DigitalOcean hosting | $24/month |
 | Domain name | $12/year |
 | **Total monthly** | **~$25-30** |
 
 ### Deployment Examples
 
-- **Pilot (10 sensors):** ~TBD one-time + $30/month
-- **Neighborhood (50 sensors):** ~TBD one-time + $30/month
-- **City-scale (200 sensors):** ~TBD one-time + $30/month
+- **Pilot (10 sensors + 1 gateway):** ~$700-830 one-time + $30/month
+- **Neighborhood (50 sensors + 2 gateways):** ~$3,100-3,600 one-time + $30/month
+- **City-scale (200 sensors + 5 gateways):** ~$12,000-14,000 one-time + $30/month
 
 **Note:** With cloud provider nonprofit credits (AWS, DigitalOcean), hosting can be $0/month for first 1-2 years.
 
@@ -390,9 +405,8 @@ We welcome contributions from developers, designers, environmental scientists, a
 
 ### Development Guidelines
 
-- **Python:** Follow PEP 8, use type hints
-- **JavaScript/TypeScript:** Use ESLint + Prettier
-- **C++:** Follow Arduino style guide
+- **TypeScript (Backend/Frontend):** Use Biome for linting/formatting, strict type checking
+- **C++:** Follow ESP-IDF style guide
 - **Commits:** Use clear, descriptive commit messages
 - **Tests:** Add tests for new features
 
@@ -481,8 +495,8 @@ We chose AGPL to ensure this project **remains open source forever**. We built t
 ### Developer Guides
 - [Architecture Overview](docs/architecture/) - System design
 - [Firmware Development](docs/firmware/) - ESP32 programming
-- [Backend Development](docs/backend/) - Python services
-- [Frontend Development](docs/frontend/) - React dashboard
+- [Backend Development](docs/backend/) - NestJS services
+- [Frontend Development](docs/frontend/) - Vue.js dashboard
 
 ### Operations
 - [Maintenance Guide](docs/operations/) - Keep sensors running
@@ -505,9 +519,11 @@ This project builds on the work of:
 Built with excellent open source software:
 - [ChirpStack](https://www.chirpstack.io/) - LoRaWAN Network Server
 - [TimescaleDB](https://www.timescale.com/) - Time-series database
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [React](https://react.dev/) - UI library
-- [Mapbox](https://www.mapbox.com/) - Maps and location services
+- [NestJS](https://nestjs.com/) - Progressive Node.js framework
+- [Vue.js](https://vuejs.org/) - Progressive JavaScript framework
+- [MapLibre GL JS](https://maplibre.org/) - Open source maps
+- [Bun](https://bun.sh/) - Fast JavaScript runtime & package manager
+- [Biome](https://biomejs.dev/) - Fast linter and formatter
 
 ### Community
 

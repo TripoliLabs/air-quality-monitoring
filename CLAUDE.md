@@ -15,50 +15,74 @@ Open-source distributed air quality monitoring network for Tripoli, Lebanon usin
 ### System Data Flow
 
 ```
-ESP32 Sensors → LoRaWAN Gateway → ChirpStack → EMQX MQTT → Python Ingestion
-  → TimescaleDB + Redis → FastAPI → React Dashboard
+ESP32 Sensors → LoRaWAN Gateway → ChirpStack → EMQX MQTT → NestJS Ingestion
+  → TimescaleDB + Redis → NestJS API → Vue.js Dashboard
 ```
 
 ### Technology Stack
 
-**Firmware:** C++ with Arduino Framework + PlatformIO (ESP32)
+**Runtime:** Node.js 24+ LTS (Krypton)
+**Language:** TypeScript 5.9+
+**Firmware:** C++ with ESP-IDF 5.x + PlatformIO (ESP32)
 **Network Server:** ChirpStack v4 (self-hosted LoRaWAN network server)
 **Message Broker:** EMQX Serverless (cloud-native MQTT)
-**Ingestion:** Python 3.12+ with asyncio (asyncpg, aiomqtt, uvloop, orjson)
-**Database:** TimescaleDB 2.13+ on PostgreSQL 16 (10-100x compression for time-series)
-**Cache:** Redis 7.2 (real-time data)
-**API:** FastAPI 0.108+ with Uvicorn
-**Frontend:** React 18 + TypeScript + Vite + Tailwind CSS
-**Maps:** MapLibre GL JS + OpenStreetMap tiles (not Mapbox - using open source alternative)
-**Charts:** Recharts
+**Backend:** NestJS 11+ (modular Node.js framework)
+**Database:** TimescaleDB 2.x on PostgreSQL 16 (10-100x compression for time-series)
+**Cache:** Redis 7.x (real-time data)
+**Frontend:** Vue.js 3.5+ + Vite 7+ + Tailwind CSS
+**Maps:** MapLibre GL JS 4+ + OpenStreetMap tiles (open source, no API keys)
+**Charts:** Chart.js or ECharts
 **Monitoring:** Grafana + Prometheus + Loki
 **Orchestration:** Docker Compose
-**Python Package Manager:** UV (10-100x faster than pip, built in Rust)
+
+### Tooling
+
+**Package Manager:** Bun (7x faster than npm, all-in-one JS runtime)
+**Linting/Formatting:** Biome 2.0+ (Rust-based, replaces ESLint + Prettier)
+**C++ Build:** PlatformIO (ESP32 ecosystem) + xmake (for dependencies)
 
 ### Hardware
 
-**Microcontroller:** Heltec LoRa32 V3 (ESP32-S3 + LoRa radio)
-**PM Sensor:** Plantower PMS5003
-**Environment Sensor:** BME280 (temperature/humidity)
-**Power:** 40W solar panel + 12V 30Ah LiFePO4 battery (3-5 days autonomy)
-**Gateways:** RAK7258 (3-5 needed for city coverage, 5-10km range each)
-**Enclosure:** IP65 weatherproof
+**Microcontroller:** LILYGO T-Beam V1.2 868MHz (ESP32 + LoRa + GPS + OLED) - $29-32
+**PM Sensor:** Plantower PMS7003 - $11.50-12
+**Environment Sensor:** BME280 (temperature/humidity/pressure) - $2.50-3
+**Power:** 5V 2W USB Solar Panel + Samsung INR18650-30Q 3000mAh + TP4056 charger
+**Gateways:** RAK7268 WisGate Edge Lite 2 (8-ch SX1302) - $139-180
+**Enclosure:** SZOMK IP67 Waterproof Box (130×90×25mm)
+**Node Cost:** ~$56-65 per sensor node
 
 ## Project Structure
 
 ```
 air-quality-monitoring/
-├── firmware/          # ESP32 C++ code (PlatformIO)
-├── backend/
-│   ├── ingestion/    # Python MQTT subscriber
-│   ├── api/          # FastAPI REST API
-│   └── database/     # SQL schema & migrations
-├── frontend/          # React + TypeScript dashboard
-├── gateway/           # ChirpStack configuration
-├── hardware/          # BOMs, schematics, assembly guides
-├── monitoring/        # Grafana dashboards
-├── docs/              # Documentation
-└── docker-compose.yml # Full stack orchestration
+├── firmware/              # ESP32 C++ code (PlatformIO + ESP-IDF)
+│   ├── src/
+│   │   ├── main.cpp
+│   │   ├── sensors/      # PMS7003, BME280 drivers
+│   │   ├── lora/         # LoRaWAN communication
+│   │   └── power/        # Deep sleep management
+│   └── platformio.ini
+├── backend/               # NestJS services (TypeScript)
+│   ├── src/
+│   │   ├── ingestion/    # MQTT → Database pipeline
+│   │   ├── api/          # REST API modules
+│   │   ├── database/     # TypeORM entities, migrations
+│   │   └── common/       # Shared utilities, DTOs
+│   ├── package.json
+│   └── biome.json        # Linting/formatting config
+├── frontend/              # Vue.js + Vite dashboard
+│   ├── src/
+│   │   ├── components/   # Map, Charts, Widgets
+│   │   ├── views/        # Home, Sensor Detail, About
+│   │   └── i18n/         # Arabic + English translations
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── biome.json
+├── gateway/               # ChirpStack configuration
+├── hardware/              # BOMs, schematics, assembly guides
+├── monitoring/            # Grafana dashboards
+├── docs/                  # Documentation
+└── docker-compose.yml     # Full stack orchestration
 ```
 
 ## Development Commands
@@ -69,35 +93,43 @@ air-quality-monitoring/
 cd firmware
 pio run                    # Build firmware
 pio run --target upload    # Flash to ESP32
-pio device monitor        # View serial output
-pio test                  # Run tests
+pio device monitor         # View serial output
+pio test                   # Run tests
 ```
 
-### Backend - Python (using UV)
+### Backend - NestJS (using Bun)
 
 ```bash
-cd backend/api
-uv venv                                    # Create virtual environment
-source .venv/bin/activate                  # Activate (Linux/Mac)
-uv pip install -r requirements.txt         # Install dependencies
-uv pip install -r requirements-dev.txt     # Install dev dependencies
-pytest                                     # Run tests
-pytest --cov                               # Run tests with coverage
-black .                                    # Format code
-ruff check .                               # Lint code
-uvicorn main:app --reload                  # Start dev server
+cd backend
+bun install                # Install dependencies (7x faster than npm)
+bun run start:dev          # Start dev server with hot reload
+bun run build              # Build for production
+bun run start:prod         # Start production server
+bun test                   # Run tests
+bun run biome:check        # Lint and format check
+bun run biome:fix          # Auto-fix lint and format issues
 ```
 
-### Frontend
+### Frontend - Vue.js (using Bun)
 
 ```bash
 cd frontend
-npm install               # Install dependencies
-npm run dev              # Start dev server (http://localhost:5173)
-npm run build            # Build for production
-npm run lint             # Run ESLint
-npm run format           # Run Prettier
-npm test                 # Run tests
+bun install                # Install dependencies
+bun run dev                # Start dev server (http://localhost:5173)
+bun run build              # Build for production
+bun run preview            # Preview production build
+bun test                   # Run tests
+bun run biome:check        # Lint and format check
+bun run biome:fix          # Auto-fix lint and format issues
+```
+
+### Biome Commands (Linting & Formatting)
+
+```bash
+bunx biome check .              # Check all files
+bunx biome check --write .      # Fix all auto-fixable issues
+bunx biome format .             # Format only
+bunx biome lint .               # Lint only
 ```
 
 ### Docker (Full Stack)
@@ -143,11 +175,18 @@ docker-compose -f docker-compose.test.yml up  # Run integration tests
 - Aligns with AGPL-3.0 ethos and civic tech values
 - Perfect for projects requiring full control and transparency
 
-### Why UV for Python?
-- 10-100x faster than pip for dependency resolution
+### Why Bun?
+- 7x faster than npm for package installation
+- All-in-one: runtime + package manager + bundler + test runner
+- Native TypeScript support without transpilation
+- Drop-in replacement for Node.js in most cases
+
+### Why Biome?
+- 30x faster than ESLint + Prettier combined
+- Single tool for linting AND formatting
 - Built in Rust for performance
-- Modern replacement for pip/pip-tools
-- Better dependency resolution algorithm
+- Type-aware linting since v2.0 (catches more bugs)
+- Zero configuration needed for most projects
 
 ## Lebanon Context (Critical)
 
@@ -169,22 +208,20 @@ docker-compose -f docker-compose.test.yml up  # Run integration tests
 
 ### Code Style
 
-**Python:**
-- Follow PEP 8
-- Use type hints for all function parameters and return values
-- Maximum line length: 100 characters
-- Format with `black`, lint with `ruff`
-
-**TypeScript/JavaScript:**
-- Use ESLint and Prettier configurations provided
-- Prefer functional components with hooks
+**TypeScript (Backend & Frontend):**
+- Use Biome for linting and formatting (replaces ESLint + Prettier)
+- Strict type checking enabled (`strict: true` in tsconfig)
 - Use `const` over `let`, never use `var`
+- Prefer functional components with Composition API (Vue)
+- Maximum line length: 100 characters
+- Use explicit return types on functions
 
 **C++ (Firmware):**
-- Follow Arduino style guide
+- Follow ESP-IDF style guide
 - Use meaningful names for variables and functions
 - Keep functions small and focused
 - Comment complex logic
+- Use `constexpr` where possible for compile-time constants
 
 ### Git Workflow
 
@@ -223,14 +260,14 @@ Closes #123
 2. **LoRa transmission** to nearest gateway (868MHz)
 3. **ChirpStack processes** packet (decrypts, validates, deduplicates)
 4. **MQTT publish** to topic: `application/{app_id}/device/{dev_eui}/up`
-5. **Python ingestion service**:
-   - Subscribes to MQTT
-   - Validates sensor data
+5. **NestJS ingestion service**:
+   - Subscribes to MQTT via microservice transport
+   - Validates sensor data with class-validator
    - Calculates AQI (Air Quality Index)
-   - Writes to TimescaleDB
+   - Writes to TimescaleDB via TypeORM
    - Updates Redis cache
-6. **FastAPI** serves data from TimescaleDB/Redis
-7. **React dashboard** displays real-time map + charts
+6. **NestJS API** serves data from TimescaleDB/Redis (REST + WebSocket)
+7. **Vue.js dashboard** displays real-time map + charts
 
 ### Data Format
 
@@ -285,11 +322,25 @@ Sensor readings JSON structure:
 
 ## Important Links
 
+**Backend & Frontend:**
+- NestJS Docs: https://docs.nestjs.com/
+- Vue.js Docs: https://vuejs.org/guide/
+- Vite Docs: https://vite.dev/guide/
+- Biome Docs: https://biomejs.dev/
+- Bun Docs: https://bun.sh/docs
+
+**Infrastructure:**
 - ChirpStack Docs: https://www.chirpstack.io/docs/
 - TimescaleDB Docs: https://docs.timescale.com/
 - MapLibre GL JS: https://maplibre.org/maplibre-gl-js/docs/
+
+**LoRaWAN & Air Quality:**
 - The Things Network: https://www.thethingsnetwork.org/
 - OpenAQ: https://openaq.org/
+
+**Hardware:**
+- LILYGO T-Beam: https://www.lilygo.cc/products/t-beam-v1-1-esp32-lora-module
+- PlatformIO ESP-IDF: https://docs.platformio.org/en/latest/frameworks/espidf.html
 
 ## Security Considerations
 
@@ -313,4 +364,4 @@ This project follows a common sense code of conduct. Be respectful, collaborativ
 
 ---
 
-Last updated: October 26, 2024
+Last updated: December 13, 2025
