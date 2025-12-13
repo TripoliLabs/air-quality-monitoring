@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+:root {
+  --color-good: #00e400;
+  --color-moderate: #ffff00;
+  --color-unhealthy-sensitive: #ff7e00;
+  --color-unhealthy: #ff0000;
+  --color-very-unhealthy: #8f3f97;
+  --color-hazardous: #7e0023;
+}
+
+/* RTL support for Arabic */
+[dir='rtl'] {
+  text-align: right;
+}
+
+/* MapLibre GL JS container */
+.maplibregl-map {
+  font-family: inherit;
+}
+
+/* AQI color classes */
+.aqi-good {
+  background-color: var(--color-good);
+}
+
+.aqi-moderate {
+  background-color: var(--color-moderate);
+}
+
+.aqi-unhealthy-sensitive {
+  background-color: var(--color-unhealthy-sensitive);
+}
+
+.aqi-unhealthy {
+  background-color: var(--color-unhealthy);
+  color: white;
+}
+
+.aqi-very-unhealthy {
+  background-color: var(--color-very-unhealthy);
+  color: white;
+}
+
+.aqi-hazardous {
+  background-color: var(--color-hazardous);
+  color: white;
+}
