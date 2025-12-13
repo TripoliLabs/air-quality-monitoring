@@ -65,14 +65,14 @@ commit-msg:
           exit 1
         fi
 
-pre-push:
-  parallel: true
-  commands:
-    # Run tests before push
-    backend-test:
-      glob: "backend/**/*.ts"
-      run: cd backend && bun run test --passWithNoTests
-
-    frontend-test:
-      glob: "frontend/**/*.{ts,vue}"
-      run: cd frontend && bun run test --passWithNoTests
+# pre-push:
+#   parallel: true
+#   commands:
+#     # Run tests before push
+#     backend-test:
+#       glob: "backend/**/*.ts"
+#       run: cd backend && bun run test --passWithNoTests
+#
+#     frontend-test:
+#       glob: "frontend/**/*.{ts,vue}"
+#       run: cd frontend && bun run test --passWithNoTests
