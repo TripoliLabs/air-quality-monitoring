@@ -177,18 +177,18 @@ lefthook run pre-commit --all      # Run on all files
 lefthook install                   # Reinstall hooks
 ```
 
-### CI/CD (GitHub Actions)
+### CI (GitHub Actions)
 
 CI is configured in `.github/workflows/ci.yml` with path-based job filtering:
 
 | Job | Triggered By | Actions |
 |-----|--------------|---------|
-| `backend` | `backend/**` changes | Install deps, lint, typecheck, test |
-| `frontend` | `frontend/**` changes | Install deps, lint, typecheck, test, build |
-| `docker` | `Dockerfile`, `docker-compose.yml` changes | Build Docker images |
-| `integration` | Backend, frontend, or docker changes | Full stack integration tests |
+| `backend` | `backend/**` changes | Install deps, lint, typecheck, test, build |
+| `frontend` | `frontend/**` changes | Install deps, lint, format check, typecheck, test, build |
 
 Jobs only run when relevant files change (uses `dorny/paths-filter` action).
+
+> **Note:** Docker build and integration tests will be added when deployment infrastructure is set up.
 
 ## Key Design Decisions
 

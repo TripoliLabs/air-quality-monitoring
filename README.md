@@ -308,10 +308,8 @@ GitHub Actions CI runs automatically on pull requests and pushes. Jobs are trigg
 
 | Job | Trigger Paths | Checks |
 |-----|---------------|--------|
-| **Backend** | `backend/**` | Lint, type check, tests |
-| **Frontend** | `frontend/**` | Lint, type check, tests, build |
-| **Docker** | `**/Dockerfile`, `docker-compose.yml` | Build images |
-| **Integration** | `backend/**`, `frontend/**`, `docker-compose.yml` | Full stack tests |
+| **Backend** | `backend/**` | Lint, type check, tests, build |
+| **Frontend** | `frontend/**` | Lint, format, type check, tests, build |
 
 CI uses Bun for faster dependency installation and test execution.
 
