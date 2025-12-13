@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 
 const route = useRoute();
 const { t } = useI18n();
 
 const sensorId = route.params.id as string;
-const sensor = ref(null);
-const readings = ref([]);
+const _sensor = ref(null); // TODO: populate from API
+const _readings = ref([]); // TODO: populate from API
 const loading = ref(true);
 
 onMounted(async () => {
@@ -20,15 +20,15 @@ onMounted(async () => {
 <template>
   <div class="space-y-6">
     <!-- Sensor Header -->
-    <section class="bg-white rounded-lg shadow p-4">
+    <section class="rounded-lg bg-white p-4 shadow">
       <h2 class="text-2xl font-semibold">{{ t('sensor.details') }}</h2>
       <p class="text-gray-500">ID: {{ sensorId }}</p>
     </section>
 
     <!-- Current Readings -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <h3 class="text-xl font-semibold mb-4">{{ t('readings.current') }}</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <section class="rounded-lg bg-white p-4 shadow">
+      <h3 class="mb-4 text-xl font-semibold">{{ t('readings.current') }}</h3>
+      <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div class="text-center">
           <p class="text-sm text-gray-600">PM2.5</p>
           <p class="text-2xl font-bold">-- µg/m³</p>
@@ -49,9 +49,9 @@ onMounted(async () => {
     </section>
 
     <!-- Historical Chart -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <h3 class="text-xl font-semibold mb-4">{{ t('readings.history') }}</h3>
-      <div class="h-64 bg-gray-100 rounded flex items-center justify-center">
+    <section class="rounded-lg bg-white p-4 shadow">
+      <h3 class="mb-4 text-xl font-semibold">{{ t('readings.history') }}</h3>
+      <div class="flex h-64 items-center justify-center rounded bg-gray-100">
         <!-- Chart.js chart will be rendered here -->
         <p class="text-gray-500">Chart loading...</p>
       </div>

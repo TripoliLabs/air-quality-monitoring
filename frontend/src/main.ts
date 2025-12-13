@@ -5,14 +5,14 @@
  * License: AGPL-3.0
  */
 
-import { createApp } from 'vue';
 import { createPinia } from 'pinia';
+import { createApp } from 'vue';
 import { createI18n } from 'vue-i18n';
 
 import App from './App.vue';
-import router from './router';
-import en from './i18n/en';
 import ar from './i18n/ar';
+import en from './i18n/en';
+import router from './router';
 
 import './style.css';
 

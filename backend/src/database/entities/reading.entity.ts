@@ -4,14 +4,7 @@
  * Stored in TimescaleDB hypertable for efficient time-series queries
  */
 
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  ManyToOne,
-  Index,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('readings')
 @Index(['sensorId', 'timestamp'])

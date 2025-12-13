@@ -3,8 +3,8 @@
  * REST API endpoints for sensor management
  */
 
-import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('sensors')
 @Controller('sensors')
@@ -30,10 +30,10 @@ export class SensorsController {
   @ApiOperation({ summary: 'Get readings for a sensor' })
   @ApiResponse({ status: 200, description: 'List of readings' })
   async getReadings(
-    @Param('id') id: string,
-    @Query('start') start?: string,
-    @Query('end') end?: string,
-    @Query('limit') limit?: number,
+    @Param('id') _id: string,
+    @Query('start') _start?: string,
+    @Query('end') _end?: string,
+    @Query('limit') _limit?: number,
   ): Promise<unknown[]> {
     // TODO: Implement
     return [];

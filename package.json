@@ -1,0 +1,23 @@
+{
+  "name": "air-quality-monitoring",
+  "version": "0.1.0",
+  "description": "Distributed Air Quality Monitoring Network for Tripoli, Lebanon",
+  "author": "TripoliLabs",
+  "license": "AGPL-3.0",
+  "private": true,
+  "scripts": {
+    "prepare": "lefthook install",
+    "lint": "bun run lint:backend && bun run lint:frontend",
+    "lint:backend": "cd backend && bun run biome:check",
+    "lint:frontend": "cd frontend && bun run biome:check",
+    "test": "bun run test:backend && bun run test:frontend",
+    "test:backend": "cd backend && bun run test",
+    "test:frontend": "cd frontend && bun run test"
+  },
+  "devDependencies": {
+    "lefthook": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

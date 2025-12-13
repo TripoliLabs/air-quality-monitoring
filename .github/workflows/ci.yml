@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging, dev]
+  pull_request:
+    branches: [main, staging, dev]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================================================
+  # Detect Changes
+  # ==========================================================================
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            docker:
+              - 'docker-compose.yml'
+              - '**/Dockerfile'
+
+  # ==========================================================================
+  # Backend
+  # ==========================================================================
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint & Format
+        run: bun run biome:check
+
+      - name: Type Check
+        run: bun run tsc --noEmit
+
+      - name: Run Tests
+        run: bun run test --passWithNoTests
+
+      - name: Build
+        run: bun run build
+
+  # ==========================================================================
+  # Frontend
+  # ==========================================================================
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format Check
+        run: bun run format:check
+
+      - name: Type Check
+        run: bun run vue-tsc --noEmit
+
+      - name: Run Tests
+        run: bun run test --passWithNoTests
+
+      - name: Build
+        run: bun run build
+
+  # ==========================================================================
+  # Docker Build
+  # ==========================================================================
+  docker:
+    needs: [changes, backend, frontend]
+    if: |
+      always() &&
+      (needs.changes.outputs.docker == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true') &&
+      (needs.backend.result == 'success' || needs.backend.result == 'skipped') &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: prod
+          push: false
+          tags: airquality-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: prod
+          push: false
+          tags: airquality-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=https://api.example.com
+            VITE_WS_URL=wss://api.example.com
+
+  # ==========================================================================
+  # Integration Tests (Optional - runs on main/staging only)
+  # ==========================================================================
+  integration:
+    needs: [docker]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Services
+        run: |
+          docker-compose up -d timescaledb redis mosquitto
+          sleep 10
+
+      - name: Health Check - Database
+        run: |
+          docker-compose exec -T timescaledb pg_isready -U airquality
+
+      - name: Health Check - Redis
+        run: |
+          docker-compose exec -T redis redis-cli ping
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose down -v

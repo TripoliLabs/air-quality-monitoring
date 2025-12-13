@@ -2,8 +2,8 @@
  * DTOs for Sensor Readings
  */
 
-import { IsNumber, IsString, IsOptional, Min, Max, IsDateString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 /**
  * DTO for incoming sensor data from ChirpStack/MQTT

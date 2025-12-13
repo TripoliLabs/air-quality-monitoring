@@ -38,7 +38,11 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → EMQX MQTT → NestJS Ingest
 ### Tooling
 
 **Package Manager:** Bun (7x faster than npm, all-in-one JS runtime)
-**Linting/Formatting:** Biome 2.0+ (Rust-based, replaces ESLint + Prettier)
+**Backend Linting:** Biome 2.0+ (Rust-based, replaces ESLint + Prettier)
+**Frontend Linting:** ESLint 9+ with eslint-plugin-vue (full Vue template support)
+**Frontend Formatting:** Prettier with prettier-plugin-tailwindcss
+**Git Hooks:** Lefthook (Go-based, fast parallel execution)
+**CI:** GitHub Actions (path-based job filtering)
 **C++ Build:** PlatformIO (ESP32 ecosystem) + xmake (for dependencies)
 
 ### Hardware
@@ -119,13 +123,16 @@ bun run dev                # Start dev server (http://localhost:5173)
 bun run build              # Build for production
 bun run preview            # Preview production build
 bun test                   # Run tests
-bun run biome:check        # Lint and format check
-bun run biome:fix          # Auto-fix lint and format issues
+bun run lint               # ESLint check
+bun run lint:fix           # ESLint auto-fix
+bun run format             # Prettier format
+bun run format:check       # Prettier check
 ```
 
-### Biome Commands (Linting & Formatting)
+### Biome Commands (Backend Only)
 
 ```bash
+cd backend
 bunx biome check .              # Check all files
 bunx biome check --write .      # Fix all auto-fixable issues
 bunx biome format .             # Format only
@@ -141,6 +148,47 @@ docker-compose logs -f api               # View logs
 docker-compose down                      # Stop all services
 docker-compose -f docker-compose.test.yml up  # Run integration tests
 ```
+
+### Pre-commit Hooks (Lefthook)
+
+Git hooks are managed by [lefthook](https://github.com/evilmartians/lefthook) and installed automatically via `bun install` in the root directory.
+
+**Pre-commit hooks (run in parallel):**
+- `backend-lint`: Biome check with auto-fix on backend files
+- `backend-typecheck`: TypeScript type checking (`tsc --noEmit`)
+- `frontend-lint`: ESLint with auto-fix on frontend files (`.ts`, `.js`, `.vue`)
+- `frontend-format`: Prettier formatting on frontend files
+- `frontend-typecheck`: Vue TypeScript type checking (`vue-tsc --noEmit`)
+- `secrets`: Scans for hardcoded credentials (disabled by default)
+
+**Commit-msg hook:**
+- Enforces [Conventional Commits](https://www.conventionalcommits.org/) format
+- Format: `<type>(<scope>): <description>`
+- Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`, `build`, `perf`
+
+**Pre-push hooks:**
+- `backend-test`: Runs backend tests before push
+- `frontend-test`: Runs frontend tests before push
+
+**Manual commands:**
+```bash
+lefthook run pre-commit            # Run on staged files
+lefthook run pre-commit --all      # Run on all files
+lefthook install                   # Reinstall hooks
+```
+
+### CI/CD (GitHub Actions)
+
+CI is configured in `.github/workflows/ci.yml` with path-based job filtering:
+
+| Job | Triggered By | Actions |
+|-----|--------------|---------|
+| `backend` | `backend/**` changes | Install deps, lint, typecheck, test |
+| `frontend` | `frontend/**` changes | Install deps, lint, typecheck, test, build |
+| `docker` | `Dockerfile`, `docker-compose.yml` changes | Build Docker images |
+| `integration` | Backend, frontend, or docker changes | Full stack integration tests |
+
+Jobs only run when relevant files change (uses `dorny/paths-filter` action).
 
 ## Key Design Decisions
 
@@ -181,12 +229,27 @@ docker-compose -f docker-compose.test.yml up  # Run integration tests
 - Native TypeScript support without transpilation
 - Drop-in replacement for Node.js in most cases
 
-### Why Biome?
+### Why Biome (Backend)?
 - 30x faster than ESLint + Prettier combined
 - Single tool for linting AND formatting
 - Built in Rust for performance
 - Type-aware linting since v2.0 (catches more bugs)
-- Zero configuration needed for most projects
+- Works well for pure TypeScript (NestJS backend)
+
+### Why ESLint + Prettier (Frontend)?
+- `eslint-plugin-vue` provides full Vue template analysis
+- Catches unused variables in `<script setup>` that are used in `<template>`
+- Vue-specific rules (component naming, props/emits declarations)
+- Mature ecosystem with excellent Vue 3 + TypeScript support
+- Biome's Vue support is still developing (no cross-template analysis)
+
+### Why Lefthook?
+- Written in Go, extremely fast startup (no Node.js overhead)
+- Parallel hook execution (runs backend and frontend checks simultaneously)
+- Works great in monorepos with `root:` directive for subdirectories
+- Simple YAML configuration
+- Auto-staging of fixed files with `stage_fixed: true`
+- No npm dependencies (standalone binary)
 
 ## Lebanon Context (Critical)
 

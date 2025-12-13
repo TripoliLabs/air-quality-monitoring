@@ -3,8 +3,8 @@
  * Subscribes to ChirpStack MQTT topics and processes incoming sensor data
  */
 
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MqttService implements OnModuleInit, OnModuleDestroy {
@@ -25,8 +25,8 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
   private async connect(): Promise<void> {
     const mqttUrl = this.configService.get<string>('MQTT_URL', 'mqtt://localhost:1883');
-    const username = this.configService.get<string>('MQTT_USERNAME', '');
-    const password = this.configService.get<string>('MQTT_PASSWORD', '');
+    const _username = this.configService.get<string>('MQTT_USERNAME', '');
+    const _password = this.configService.get<string>('MQTT_PASSWORD', '');
 
     this.logger.log(`Connecting to MQTT broker: ${mqttUrl}`);
 
@@ -43,23 +43,5 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     // if (this.client) {
     //   await this.client.endAsync();
     // }
-  }
-
-  /**
-   * Process incoming sensor data from ChirpStack
-   */
-  private async handleMessage(topic: string, payload: Buffer): Promise<void> {
-    try {
-      const data = JSON.parse(payload.toString());
-      this.logger.debug(`Received message on ${topic}`);
-
-      // TODO: Parse ChirpStack payload
-      // TODO: Validate data
-      // TODO: Calculate AQI
-      // TODO: Store in TimescaleDB
-      // TODO: Update Redis cache
-    } catch (error) {
-      this.logger.error(`Error processing message: ${error}`);
-    }
   }
 }

@@ -140,7 +140,8 @@ Lebanon faces severe air quality challenges from:
 |-----------|-----------|---------|-----|
 | **Runtime** | Node.js | 24+ LTS | Long-term support, stable for production |
 | **Package Manager** | Bun | 1.x | 7x faster than npm, all-in-one JS runtime |
-| **Linting/Formatting** | Biome | 2.0+ | 30x faster than ESLint+Prettier, type-aware |
+| **Backend Linting** | Biome | 2.0+ | 30x faster than ESLint+Prettier, type-aware |
+| **Frontend Linting** | ESLint + Prettier | 9+ | Full Vue template support with eslint-plugin-vue |
 | **Firmware** | C++ + ESP-IDF | 5.x | Battery efficiency, ULP coprocessor support, proven at scale |
 | **Network Server** | ChirpStack | 4.x | Open source LoRaWAN, works offline |
 | **Message Broker** | EMQX Serverless | - | Free tier, scalable, cloud-native MQTT |
@@ -271,6 +272,48 @@ Dashboard now available at http://localhost:5173
 bunx biome check --write .    # Fix all issues
 bunx biome check .            # Check only
 ```
+
+### Pre-commit Hooks
+
+This project uses [lefthook](https://github.com/evilmartians/lefthook) for git hooks. Hooks are installed automatically when you run `bun install` in the root directory.
+
+**Pre-commit checks (run in parallel):**
+- **Backend:** Biome lint/format (auto-fix) + TypeScript type checking
+- **Frontend:** ESLint (auto-fix) + Prettier + Vue TypeScript type checking
+- **Secrets detection:** Scans for potential credentials (optional)
+
+**Commit message format:**
+Commits must follow [Conventional Commits](https://www.conventionalcommits.org/):
+```
+<type>(<scope>): <description>
+
+Types: feat, fix, docs, style, refactor, test, chore, ci, build, perf
+
+Example: feat(backend): add user authentication
+```
+
+**Pre-push checks:**
+- Backend tests
+- Frontend tests
+
+**Manual commands:**
+```bash
+lefthook run pre-commit       # Run pre-commit on staged files
+lefthook run pre-commit --all # Run on all files
+```
+
+### Continuous Integration
+
+GitHub Actions CI runs automatically on pull requests and pushes. Jobs are triggered based on changed paths:
+
+| Job | Trigger Paths | Checks |
+|-----|---------------|--------|
+| **Backend** | `backend/**` | Lint, type check, tests |
+| **Frontend** | `frontend/**` | Lint, type check, tests, build |
+| **Docker** | `**/Dockerfile`, `docker-compose.yml` | Build images |
+| **Integration** | `backend/**`, `frontend/**`, `docker-compose.yml` | Full stack tests |
+
+CI uses Bun for faster dependency installation and test execution.
 
 **7. Flash firmware to ESP32:**
 ```bash
