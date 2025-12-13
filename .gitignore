@@ -194,8 +194,7 @@ celerybeat.pid
 # SageMath
 *.sage.py
 
-# Environments
-.env
+# Virtual Environments
 .venv
 env/
 venv/
@@ -369,7 +368,6 @@ lerna-debug.log*
 # ============================================================================
 # Docker
 # ============================================================================
-.dockerignore
 docker-compose.override.yml
 
 # ============================================================================
@@ -377,10 +375,11 @@ docker-compose.override.yml
 # ============================================================================
 
 # PostgreSQL / TimescaleDB
-*.sql
 *.dump
 pgdata/
 postgres-data/
+# Keep init scripts
+!database/init/*.sql
 
 # SQLite
 *.sqlite
@@ -434,15 +433,10 @@ temp/
 # Environment and Configuration
 # ============================================================================
 
-# Environment variables
-.env
-.env.local
-.env.development
-.env.development.local
-.env.test
-.env.test.local
+# Environment variables (only ignore production/sensitive ones)
 .env.production
 .env.production.local
+.env.*.local
 
 # Configuration files with secrets
 config.local.js

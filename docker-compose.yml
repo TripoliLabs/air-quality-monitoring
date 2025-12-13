@@ -1,0 +1,193 @@
+# Air Quality Monitoring - Docker Compose
+# Full stack deployment for development and production
+
+services:
+  # =============================================================================
+  # Database Services
+  # =============================================================================
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: airquality-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-airquality}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-airquality}
+      POSTGRES_DB: ${DB_NAME:-airquality}
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5439:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airquality"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: airquality-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # Message Broker (MQTT)
+  # =============================================================================
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: airquality-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # MQTT
+      - "9001:9001"   # MQTT WebSocket
+    volumes:
+      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # LoRaWAN Network Server
+  # =============================================================================
+
+  chirpstack:
+    image: chirpstack/chirpstack:4
+    container_name: airquality-chirpstack
+    restart: unless-stopped
+    command: -c /etc/chirpstack
+    volumes:
+      - ./gateway/chirpstack:/etc/chirpstack
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "8080:8080"   # Web UI
+      - "1700:1700/udp" # Gateway UDP
+    environment:
+      POSTGRESQL__DSN: postgres://${DB_USERNAME:-airquality}:${DB_PASSWORD:-airquality}@timescaledb/${DB_NAME:-airquality}?sslmode=disable
+      REDIS__SERVERS: redis://redis:6379
+
+  # =============================================================================
+  # Application Services
+  # =============================================================================
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: airquality-backend
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-airquality}
+      DB_PASSWORD: ${DB_PASSWORD:-airquality}
+      DB_NAME: ${DB_NAME:-airquality}
+      REDIS_URL: redis://redis:6379
+      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: airquality-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  # =============================================================================
+  # Monitoring Services
+  # =============================================================================
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: airquality-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/provisioning:/etc/grafana/provisioning
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: airquality-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+# =============================================================================
+# Volumes
+# =============================================================================
+
+volumes:
+  timescaledb_data:
+  redis_data:
+  mosquitto_data:
+  mosquitto_log:
+  grafana_data:
+  prometheus_data:
+
+# =============================================================================
+# Networks
+# =============================================================================
+
+networks:
+  default:
+    name: airquality-network
