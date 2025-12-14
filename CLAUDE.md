@@ -15,9 +15,26 @@ Open-source distributed air quality monitoring network for Tripoli, Lebanon usin
 ### System Data Flow
 
 ```
-ESP32 Sensors → LoRaWAN Gateway → ChirpStack → EMQX MQTT → NestJS Ingestion
-  → TimescaleDB + Redis → NestJS API → Vue.js Dashboard
+ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
+                                                 ↓
+                                    ┌────────────────────────┐
+                                    │   NestJS Ingestion     │
+                                    └───────────┬────────────┘
+                                                │
+                          ┌─────────────────────┼─────────────────────┐
+                          ↓                     ↓                     ↓
+                   TimescaleDB           Redis Pub/Sub          Redis Cache
+                   (persistence)         (real-time events)     (latest values)
+                          ↑                     ↓
+                          │            NestJS WebSocket Gateway
+                          │                     ↓
+                          └──── NestJS REST API ←── Vue.js Dashboard
 ```
+
+**Data paths:**
+- **Historical queries:** Vue.js → REST API → TimescaleDB
+- **Real-time updates:** Redis Pub/Sub → WebSocket Gateway → Vue.js (Socket.IO)
+- **Latest values:** Vue.js → REST API → Redis Cache
 
 ### Technology Stack
 
@@ -28,10 +45,10 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → EMQX MQTT → NestJS Ingest
 **Message Broker:** EMQX Serverless (cloud-native MQTT)
 **Backend:** NestJS 11+ (modular Node.js framework)
 **Database:** TimescaleDB 2.x on PostgreSQL 16 (10-100x compression for time-series)
-**Cache:** Redis 7.x (real-time data)
+**Cache/PubSub:** Redis 7.x (caching + Pub/Sub for real-time WebSocket broadcast)
 **Frontend:** Vue.js 3.5+ + Vite 7+ + Tailwind CSS
 **Maps:** MapLibre GL JS 4+ + OpenStreetMap tiles (open source, no API keys)
-**Charts:** Chart.js or ECharts
+**Charts:** Apache ECharts (better for real-time time-series data)
 **Monitoring:** Grafana + Prometheus + Loki
 **Orchestration:** Docker Compose
 
@@ -81,7 +98,7 @@ air-quality-monitoring/
 │   │   └── i18n/         # Arabic + English translations
 │   ├── package.json
 │   ├── vite.config.ts
-│   └── biome.json
+│   └── eslint.config.js  # ESLint flat config (Vue + TypeScript)
 ├── gateway/               # ChirpStack configuration
 ├── hardware/              # BOMs, schematics, assembly guides
 ├── monitoring/            # Grafana dashboards
@@ -166,7 +183,7 @@ Git hooks are managed by [lefthook](https://github.com/evilmartians/lefthook) an
 - Format: `<type>(<scope>): <description>`
 - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`, `build`, `perf`
 
-**Pre-push hooks:**
+**Pre-push hooks:** (disabled for now, CI runs tests)
 - `backend-test`: Runs backend tests before push
 - `frontend-test`: Runs frontend tests before push
 
@@ -223,6 +240,14 @@ Jobs only run when relevant files change (uses `dorny/paths-filter` action).
 - Aligns with AGPL-3.0 ethos and civic tech values
 - Perfect for projects requiring full control and transparency
 
+### Why Apache ECharts (not Chart.js)?
+- Better performance with large time-series datasets (incremental rendering)
+- Built-in support for real-time streaming data without full redraws
+- More polished appearance out of the box
+- Better zoom/brush interactions for time-series exploration
+- Tree-shakeable (~100KB but only import what you need)
+- Maintained by Apache Foundation
+
 ### Why Bun?
 - 7x faster than npm for package installation
 - All-in-one: runtime + package manager + bundler + test runner
@@ -271,13 +296,19 @@ Jobs only run when relevant files change (uses `dorny/paths-filter` action).
 
 ### Code Style
 
-**TypeScript (Backend & Frontend):**
-- Use Biome for linting and formatting (replaces ESLint + Prettier)
+**TypeScript (Backend):**
+- Use Biome for linting and formatting
 - Strict type checking enabled (`strict: true` in tsconfig)
 - Use `const` over `let`, never use `var`
-- Prefer functional components with Composition API (Vue)
 - Maximum line length: 100 characters
 - Use explicit return types on functions
+
+**TypeScript/Vue (Frontend):**
+- Use ESLint with eslint-plugin-vue + Prettier
+- Strict type checking enabled (`strict: true` in tsconfig)
+- Prefer Composition API with `<script setup>`
+- Use `const` over `let`, never use `var`
+- Maximum line length: 100 characters
 
 **C++ (Firmware):**
 - Follow ESP-IDF style guide
@@ -327,10 +358,14 @@ Closes #123
    - Subscribes to MQTT via microservice transport
    - Validates sensor data with class-validator
    - Calculates AQI (Air Quality Index)
-   - Writes to TimescaleDB via TypeORM
-   - Updates Redis cache
-6. **NestJS API** serves data from TimescaleDB/Redis (REST + WebSocket)
-7. **Vue.js dashboard** displays real-time map + charts
+   - Writes to TimescaleDB via TypeORM (persistence)
+   - Publishes to Redis Pub/Sub channel (real-time broadcast)
+   - Updates Redis cache (latest values per sensor)
+6. **NestJS WebSocket gateway**:
+   - Subscribes to Redis Pub/Sub channel
+   - Broadcasts new readings to connected clients via Socket.IO
+7. **NestJS REST API** serves historical data from TimescaleDB, latest from Redis
+8. **Vue.js dashboard** receives real-time updates via WebSocket, fetches history via REST
 
 ### Data Format
 
@@ -389,6 +424,7 @@ Sensor readings JSON structure:
 - NestJS Docs: https://docs.nestjs.com/
 - Vue.js Docs: https://vuejs.org/guide/
 - Vite Docs: https://vite.dev/guide/
+- Apache ECharts: https://echarts.apache.org/
 - Biome Docs: https://biomejs.dev/
 - Bun Docs: https://bun.sh/docs
 

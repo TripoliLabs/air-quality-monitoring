@@ -1,5 +1,6 @@
 /**
  * Vue Router Configuration
+ * Project Qalawun - Air Quality Monitoring for Tripoli
  */
 
 import { createRouter, createWebHistory } from 'vue-router';
@@ -9,7 +10,12 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'home',
+      name: 'landing',
+      component: () => import('./views/LandingView.vue'),
+    },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
       component: () => import('./views/HomeView.vue'),
     },
     {
