@@ -25,7 +25,7 @@ pre-commit:
 
     frontend-format:
       root: "frontend/"
-      glob: "**/*.{ts,js,vue,css,json}"
+      glob: "**/*.{ts,js,vue,css,json,html}"
       run: bun run prettier --write {staged_files} && git add {staged_files}
       stage_fixed: true
 
