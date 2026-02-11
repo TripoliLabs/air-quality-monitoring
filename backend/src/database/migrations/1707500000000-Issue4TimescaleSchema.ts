@@ -1,9 +1,10 @@
-import type { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class Issue4TimescaleSchema1707500000000 implements MigrationInterface {
   name = 'Issue4TimescaleSchema1707500000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS timescaledb;`);
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`);
@@ -36,6 +37,7 @@ export class Issue4TimescaleSchema1707500000000 implements MigrationInterface {
       USING GIN (neighborhood gin_trgm_ops);
     `);
 
+
     // Create readings table
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS readings (
@@ -52,7 +54,7 @@ export class Issue4TimescaleSchema1707500000000 implements MigrationInterface {
       );
     `);
 
-    // Convert readings to hypertable
+    // Convert readings table to hypertable
     await queryRunner.query(`
       SELECT create_hypertable(
         'readings',
@@ -67,7 +69,12 @@ export class Issue4TimescaleSchema1707500000000 implements MigrationInterface {
   ON readings (sensor_id, time DESC);
 `);
 
-    // Continuous aggregates
+    await queryRunner.query(`
+  CREATE INDEX IF NOT EXISTS readings_sensor_time_idx
+  ON readings (sensor_id, time DESC);
+`);
+
+     // Continuous aggregates
     await queryRunner.query(`
       CREATE MATERIALIZED VIEW IF NOT EXISTS readings_hourly
       WITH (timescaledb.continuous) AS
