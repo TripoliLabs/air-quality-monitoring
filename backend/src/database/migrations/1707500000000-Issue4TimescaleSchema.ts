@@ -61,6 +61,11 @@ export class Issue4TimescaleSchema1707500000000 implements MigrationInterface {
         if_not_exists => TRUE
       );
     `);
+    
+        await queryRunner.query(`
+  CREATE INDEX IF NOT EXISTS readings_sensor_time_idx
+  ON readings (sensor_id, time DESC);
+`);
 
     // Continuous aggregates
     await queryRunner.query(`
