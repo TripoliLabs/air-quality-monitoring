@@ -14,6 +14,7 @@ services:
       POSTGRES_USER: ${DB_USERNAME:-airquality}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-airquality}
       POSTGRES_DB: ${DB_NAME:-airquality}
+      SEED_DEV: ${SEED_DEV:-1}
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d

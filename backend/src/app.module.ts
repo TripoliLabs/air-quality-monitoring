@@ -5,6 +5,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { join } from 'node:path';
 
 // Feature modules
 import { HealthModule } from './health/health.module';
@@ -32,7 +33,12 @@ import { HealthModule } from './health/health.module';
         password: configService.get('DB_PASSWORD', 'airquality'),
         database: configService.get('DB_NAME', 'airquality'),
         autoLoadEntities: true,
-        synchronize: configService.get('NODE_ENV') !== 'production',
+        synchronize: false, // To express Timescaledb features
+
+        // Auto-run migrations on startup when explicitly enabled
+        migrationsRun: configService.get('RUN_MIGRATIONS', 'false') === 'true',
+        migrations: [join(__dirname, 'database/migrations/*{.ts,.js}')],
+
         logging: configService.get('NODE_ENV') !== 'production',
       }),
     }),

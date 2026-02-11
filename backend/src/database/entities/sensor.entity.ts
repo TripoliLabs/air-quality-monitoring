@@ -1,60 +1,35 @@
-/**
- * Sensor Entity
- * Represents a physical air quality sensor node
- */
+// backend/src/database/entities/sensor.entity.ts
 
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('sensors')
 export class Sensor {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ unique: true })
-  @Index()
-  deviceId!: string; // LoRaWAN DevEUI
+  @Index('sensors_device_eui_idx')
+  @Column({ name: 'device_eui', type: 'varchar', length: 16, unique: true })
+  deviceEui!: string;
 
-  @Column()
-  name!: string;
+  @Column({ name: 'name', type: 'varchar', length: 100, nullable: true })
+  name?: string;
 
-  @Column({ nullable: true })
-  description?: string;
+  // Keep DECIMAL as string to avoid JS float rounding issues
+  @Column({ name: 'latitude', type: 'decimal', precision: 10, scale: 8, nullable: true })
+  latitude?: string;
 
-  @Column('decimal', { precision: 10, scale: 7 })
-  latitude!: number;
+  @Column({ name: 'longitude', type: 'decimal', precision: 11, scale: 8, nullable: true })
+  longitude?: string;
 
-  @Column('decimal', { precision: 10, scale: 7 })
-  longitude!: number;
-
-  @Column({ nullable: true })
+  @Column({ name: 'neighborhood', type: 'varchar', length: 100, nullable: true })
   neighborhood?: string;
 
-  @Column({ default: true })
-  isActive!: boolean;
+  @Column({ name: 'installed_at', type: 'timestamptz', nullable: true })
+  installedAt?: Date;
 
-  @Column({ nullable: true })
-  lastSeenAt?: Date;
+  @Column({ name: 'is_active', type: 'boolean', default: true, nullable: true })
+  isActive?: boolean;
 
-  @Column('int', { nullable: true })
-  batteryMv?: number;
-
-  @Column('int', { nullable: true })
-  signalStrength?: number; // RSSI in dBm
-
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz', default: () => 'NOW()' })
   createdAt!: Date;
-
-  @UpdateDateColumn()
-  updatedAt!: Date;
-
-  // Relations
-  // @OneToMany(() => Reading, (reading) => reading.sensor)
-  // readings: Reading[];
 }

@@ -7,57 +7,55 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('readings')
-@Index(['sensorId', 'timestamp'])
+@Index(['sensorId', 'time'])
 export class Reading {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column()
-  @Index()
+  @Column({ name: 'sensor_id', type: 'uuid' })
+  @Index('readings_sensor_id_idx')
   sensorId!: string;
 
-  @Column('timestamptz')
-  @Index()
-  timestamp!: Date;
+  // TimescaleDB time column
+  @Column({ name: 'time', type: 'timestamptz' })
+  @Index('readings_time_idx')
+  time!: Date;
 
   // PM measurements (µg/m³)
-  @Column('decimal', { precision: 6, scale: 2 })
+  // NOTE: using REAL (float4) for time-series metrics keeps storage + aggregation fast.
+  @Column({ name: 'pm2_5', type: 'real' })
   pm25!: number;
 
-  @Column('decimal', { precision: 6, scale: 2 })
+  @Column({ name: 'pm10', type: 'real' })
   pm10!: number;
 
-  @Column('decimal', { precision: 6, scale: 2, nullable: true })
+  @Column({ name: 'pm1', type: 'real', nullable: true })
   pm1?: number;
 
   // Environmental measurements
-  @Column('decimal', { precision: 5, scale: 2 })
+  @Column({ name: 'temperature', type: 'real' })
   temperature!: number; // Celsius
 
-  @Column('decimal', { precision: 5, scale: 2 })
+  @Column({ name: 'humidity', type: 'real' })
   humidity!: number; // Percentage
 
-  @Column('decimal', { precision: 7, scale: 2, nullable: true })
+  @Column({ name: 'pressure', type: 'real', nullable: true })
   pressure?: number; // hPa
 
   // Calculated AQI (Air Quality Index)
-  @Column('int')
+  @Column({ name: 'aqi', type: 'int' })
   aqi!: number;
 
-  @Column({ nullable: true })
-  aqiCategory?: string; // Good, Moderate, Unhealthy, etc.
+  @Column({ name: 'aqi_category', type: 'text', nullable: true })
+  aqiCategory?: string;
 
   // Metadata
-  @Column('int', { nullable: true })
+  @Column('int', { name: 'battery_mv', nullable: true })
   batteryMv?: number;
 
-  @Column('int', { nullable: true })
-  signalStrength?: number; // RSSI in dBm
+  @Column('int', { name: 'signal_strength', nullable: true })
+  signalStrength?: number;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
-
-  // Relations
-  // @ManyToOne(() => Sensor, (sensor) => sensor.readings)
-  // sensor: Sensor;
 }
