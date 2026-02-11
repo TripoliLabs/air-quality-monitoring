@@ -1,8 +1,7 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-
-import { Sensor } from './entities/sensor.entity';
 import { Reading } from './entities/reading.entity';
+import { Sensor } from './entities/sensor.entity';
 
 const AppDataSource = new DataSource({
   type: 'postgres',
@@ -19,6 +18,5 @@ const AppDataSource = new DataSource({
 
   logging: (process.env.TYPEORM_LOGGING ?? 'false') === 'true',
 });
-
 
 export default AppDataSource;

@@ -2,10 +2,10 @@
  * Root Application Module
  */
 
+import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { join } from 'node:path';
 
 // Feature modules
 import { HealthModule } from './health/health.module';
