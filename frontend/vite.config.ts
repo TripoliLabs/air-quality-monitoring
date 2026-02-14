@@ -11,6 +11,9 @@ export default defineConfig({
       '@components': resolve(__dirname, 'src/components'),
       '@views': resolve(__dirname, 'src/views'),
       '@i18n': resolve(__dirname, 'src/i18n'),
+      '@stores': resolve(__dirname, 'src/stores'),
+      '@composables': resolve(__dirname, 'src/composables'),
+      '@mock': resolve(__dirname, 'src/mock'),
     },
   },
   server: {
@@ -25,5 +28,8 @@ export default defineConfig({
   build: {
     target: 'esnext',
     sourcemap: true,
+  },
+  optimizeDeps: {
+    include: ['echarts', 'vue-echarts'],
   },
 });

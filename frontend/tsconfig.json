@@ -22,7 +22,10 @@
       "@/*": ["src/*"],
       "@components/*": ["src/components/*"],
       "@views/*": ["src/views/*"],
-      "@i18n/*": ["src/i18n/*"]
+      "@i18n/*": ["src/i18n/*"],
+      "@stores/*": ["src/stores/*"],
+      "@composables/*": ["src/composables/*"],
+      "@mock/*": ["src/mock/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],

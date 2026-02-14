@@ -19,6 +19,11 @@ const router = createRouter({
       component: () => import('./views/HomeView.vue'),
     },
     {
+      path: '/neighborhood/:id',
+      name: 'neighborhood',
+      component: () => import('./views/NeighborhoodView.vue'),
+    },
+    {
       path: '/sensor/:id',
       name: 'sensor-detail',
       component: () => import('./views/SensorDetailView.vue'),
@@ -27,6 +32,26 @@ const router = createRouter({
       path: '/about',
       name: 'about',
       component: () => import('./views/AboutView.vue'),
+    },
+    {
+      path: '/analytics',
+      name: 'analytics',
+      component: () => import('./views/AnalyticsView.vue'),
+    },
+    {
+      path: '/health',
+      name: 'health',
+      component: () => import('./views/HealthView.vue'),
+    },
+    {
+      path: '/features',
+      name: 'features',
+      component: () => import('./views/FeaturesView.vue'),
+    },
+    {
+      path: '/api-docs',
+      name: 'api-docs',
+      component: () => import('./views/ApiDocsView.vue'),
     },
   ],
 });

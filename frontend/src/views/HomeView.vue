@@ -1,63 +1,67 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import AqiGauge from '@components/AqiGauge.vue';
+import DataDownloadPanel from '@components/DataDownloadPanel.vue';
+import SensorMap from '@components/SensorMap.vue';
+import SensorTable from '@components/SensorTable.vue';
+import StatsBar from '@components/StatsBar.vue';
+import TimeSeriesChart from '@components/TimeSeriesChart.vue';
+import { useSensorsStore } from '@stores/sensors';
+import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 
 const { t } = useI18n();
+const store = useSensorsStore();
+const router = useRouter();
 
-const sensors = ref([]);
-const loading = ref(true);
+function onSensorClick(sensorId: string): void {
+  router.push({ name: 'sensor-detail', params: { id: sensorId } });
+}
 
-onMounted(async () => {
-  // TODO: Fetch sensors from API
-  loading.value = false;
+// Pick a sensor from the worst neighborhood for the mini chart
+const overviewSensorId = computed(() => {
+  const worst = store.worstNeighborhood;
+  if (!worst) return 'sensor_001';
+  const sensors = store.getSensorsByNeighborhood(worst.id);
+  return sensors[0]?.definition.id ?? 'sensor_001';
+});
+
+onMounted(() => {
+  if (!store.isSimulating) {
+    store.startSimulation();
+  }
 });
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Map Section -->
-    <section class="rounded-lg bg-white p-4 shadow">
-      <h2 class="mb-4 text-xl font-semibold">{{ t('map.title') }}</h2>
-      <div class="flex h-96 items-center justify-center rounded bg-gray-200">
-        <!-- MapLibre GL JS map will be rendered here -->
-        <p class="text-gray-500">Map loading...</p>
-      </div>
-    </section>
+  <div class="space-y-4">
+    <!-- Stats Bar -->
+    <StatsBar />
 
-    <!-- AQI Overview -->
-    <section class="rounded-lg bg-white p-4 shadow">
-      <h2 class="mb-4 text-xl font-semibold">{{ t('aqi.current') }}</h2>
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div class="rounded-lg bg-green-100 p-4 text-center">
-          <p class="text-sm text-gray-600">{{ t('aqi.good') }}</p>
-          <p class="text-4xl font-bold text-green-600">--</p>
-          <p class="text-xs text-gray-500">{{ t('sensors.count', { count: 0 }) }}</p>
-        </div>
-        <div class="rounded-lg bg-yellow-100 p-4 text-center">
-          <p class="text-sm text-gray-600">{{ t('aqi.moderate') }}</p>
-          <p class="text-4xl font-bold text-yellow-600">--</p>
-          <p class="text-xs text-gray-500">{{ t('sensors.count', { count: 0 }) }}</p>
-        </div>
-        <div class="rounded-lg bg-red-100 p-4 text-center">
-          <p class="text-sm text-gray-600">{{ t('aqi.unhealthy') }}</p>
-          <p class="text-4xl font-bold text-red-600">--</p>
-          <p class="text-xs text-gray-500">{{ t('sensors.count', { count: 0 }) }}</p>
-        </div>
+    <!-- Summary Cards Row: AQI Gauge + Mini Chart -->
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <!-- City Average AQI -->
+      <div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
+        <p class="mb-1 text-center text-xs text-gray-500">{{ t('dashboard.cityAverage') }}</p>
+        <AqiGauge :value="store.averageAqi" />
       </div>
-    </section>
 
-    <!-- Sensors List -->
-    <section class="rounded-lg bg-white p-4 shadow">
-      <h2 class="mb-4 text-xl font-semibold">{{ t('sensors.title') }}</h2>
-      <div v-if="loading" class="py-8 text-center">
-        <p class="text-gray-500">Loading sensors...</p>
+      <!-- Mini Time Series -->
+      <div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
+        <p class="mb-1 text-xs text-gray-500">{{ t('dashboard.trend24h') }}</p>
+        <TimeSeriesChart :sensor-id="overviewSensorId" height="170px" />
       </div>
-      <div v-else-if="sensors.length === 0" class="py-8 text-center">
-        <p class="text-gray-500">{{ t('sensors.empty') }}</p>
-      </div>
-      <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <!-- Sensor cards will be rendered here -->
-      </div>
-    </section>
+    </div>
+
+    <!-- Full-Width Map -->
+    <SensorMap :sensors="store.allSensors" height="500px" @sensor-click="onSensorClick" />
+
+    <!-- Sensor Table -->
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
+      <SensorTable />
+    </div>
+
+    <!-- Download Panel -->
+    <DataDownloadPanel />
   </div>
 </template>

@@ -101,13 +101,30 @@ export default {
     },
     footer: 'Built with care for Tripoli by TripoliLabs. AGPL-3.0 Licensed.',
   },
+  dashboard: {
+    title: 'Dashboard',
+    cityAverage: 'City Average AQI',
+    trend24h: '24h Trend',
+    activeSensors: 'Active Sensors',
+    avgAqi: 'Avg AQI',
+    worstArea: 'Worst Area',
+    bestArea: 'Best Area',
+    lastUpdate: 'Last Update',
+    allSensors: 'All Sensors',
+  },
   map: {
     title: 'Air Quality Map',
+    layer: 'Layer',
+    layerAqi: 'AQI',
+    layerPm25: 'PM2.5',
+    layerTemp: 'Temp',
+    layerHumidity: 'Humidity',
   },
   aqi: {
     current: 'Current Air Quality',
     good: 'Good',
     moderate: 'Moderate',
+    unhealthySensitive: 'Unhealthy for Sensitive Groups',
     unhealthy: 'Unhealthy',
     veryUnhealthy: 'Very Unhealthy',
     hazardous: 'Hazardous',
@@ -116,9 +133,25 @@ export default {
     title: 'Sensors',
     count: '{count} sensors',
     empty: 'No sensors available',
+    name: 'Name',
+    neighborhood: 'Neighborhood',
+    search: 'Search sensors...',
+    status: 'Status',
+  },
+  neighborhood: {
+    sensors: 'Sensors',
+    averages: 'Neighborhood Averages',
+    backToDashboard: 'Back to Dashboard',
   },
   sensor: {
     details: 'Sensor Details',
+    location: 'Location',
+    metadata: 'Metadata',
+    id: 'Sensor ID',
+    battery: 'Battery',
+    signal: 'Signal Strength',
+    installed: 'Installed',
+    backToDashboard: 'Back to Dashboard',
   },
   readings: {
     current: 'Current Readings',
@@ -129,6 +162,7 @@ export default {
   },
   about: {
     title: 'About',
+    subtitle: 'Breathing Data Into Action',
     description:
       'This is an open-source air quality monitoring network for Tripoli, Lebanon. We use solar-powered LoRaWAN sensors to measure PM2.5, PM10, temperature, and humidity across the city.',
     mission: 'Our Mission',
@@ -137,6 +171,169 @@ export default {
     openSource: 'Open Source',
     openSourceText:
       'This project is licensed under AGPL-3.0. All code, hardware designs, and data are freely available to the community.',
+  },
+  nav: {
+    dashboard: 'Dashboard',
+    about: 'About',
+    analytics: 'Analytics',
+    health: 'Health',
+    features: 'Features',
+    apiDocs: 'API Docs',
+    more: 'More',
+  },
+  footer: {
+    project: 'Project',
+    tagline: 'Open-source air quality monitoring for Tripoli, Lebanon.',
+    quickLinks: 'Quick Links',
+    community: 'Community',
+    viewSource: 'View Source',
+    license: 'AGPL-3.0',
+    copyright: '© 2025 TripoliLabs. Built with care for Tripoli.',
+  },
+  download: {
+    title: 'Download Data',
+    dateRange: 'Date Range',
+    from: 'From',
+    to: 'To',
+    sensors: 'Sensors',
+    selectAll: 'Select All',
+    format: 'Format',
+    readingsCount: '{count} readings',
+    download: 'Download',
+    noData: 'No data available for the selected filters.',
+  },
+  analytics: {
+    title: 'Analytics & Insights',
+    subtitle: 'Data-driven analysis of air quality across Tripoli',
+    neighborhoodComparison: 'Neighborhood Comparison',
+    hourlyProfile: 'Hourly AQI Profile',
+    pm25VsTemp: 'PM2.5 vs Temperature',
+    aqiDistribution: 'AQI Distribution',
+    topPolluted: 'Top Polluted Areas',
+    rank: 'Rank',
+    neighborhood: 'Neighborhood',
+    avgAqi: 'Avg AQI',
+    avgPm25: 'Avg PM2.5',
+    sensorCount: 'Sensors',
+  },
+  featuresPage: {
+    title: 'Features',
+    subtitle: 'What makes Project Qalawun unique',
+    current: 'Current Features',
+    upcomingTitle: 'Roadmap & Upcoming',
+    comingSoon: 'Coming Soon',
+    techStack: 'Technology Stack',
+    features: {
+      realtime: {
+        title: 'Real-Time Monitoring',
+        description:
+          'Live sensor data streamed every 5 minutes via WebSocket, with instant dashboard updates.',
+      },
+      maps: {
+        title: 'Interactive Maps',
+        description:
+          'MapLibre GL JS powered maps with AQI-colored markers, clustering, and neighborhood boundaries.',
+      },
+      network: {
+        title: 'Multi-Sensor Network',
+        description:
+          '52 sensors across 10 neighborhoods providing comprehensive city-wide coverage.',
+      },
+      bilingual: {
+        title: 'Bilingual Support',
+        description:
+          'Full Arabic and English support with RTL layout, localized content, and language toggle.',
+      },
+      solar: {
+        title: 'Solar Powered',
+        description:
+          'Each sensor node runs on solar power with 3-5 days battery backup for grid independence.',
+      },
+      lorawan: {
+        title: 'LoRaWAN Connectivity',
+        description:
+          '5-10km range per gateway using LoRaWAN radio. Only gateways need internet access.',
+      },
+    },
+    upcoming: {
+      mobile: {
+        title: 'Mobile App',
+        description:
+          'Native mobile app for iOS and Android with push notifications and location-based alerts.',
+      },
+      alerts: {
+        title: 'Alerts & Notifications',
+        description:
+          'Configurable AQI thresholds with email, SMS, and push notification alerts.',
+      },
+      openaq: {
+        title: 'OpenAQ Integration',
+        description:
+          'Automatic data sharing with OpenAQ global air quality platform for broader impact.',
+      },
+      reports: {
+        title: 'Historical Reports',
+        description:
+          'Downloadable weekly and monthly air quality reports with trend analysis.',
+      },
+      api: {
+        title: 'Public API',
+        description:
+          'RESTful API for developers to access real-time and historical air quality data.',
+      },
+    },
+  },
+  health: {
+    title: 'Sensor Health Dashboard',
+    subtitle: 'Monitor the status and performance of the sensor fleet',
+    totalSensors: 'Total Sensors',
+    online: 'Online',
+    offline: 'Offline',
+    maintenance: 'Maintenance',
+    avgBattery: 'Avg Battery',
+    avgSignal: 'Avg Signal',
+    batteryLevels: 'Battery Levels',
+    signalStrength: 'Signal Strength',
+    statusOverview: 'Status Overview',
+    healthAlerts: 'Health Alerts',
+    alertLowBattery: '{count} sensors below 30% battery',
+    alertWeakSignal: '{count} sensors with weak signal',
+    alertOffline: '{count} sensors offline',
+    alertMaintenance: '{count} sensors in maintenance',
+    noAlerts: 'All sensors operating normally',
+    sensorHealth: 'Sensor Health Table',
+    name: 'Name',
+    neighborhood: 'Neighborhood',
+    status: 'Status',
+    battery: 'Battery %',
+    signal: 'Signal dBm',
+    lastReading: 'Last Reading',
+  },
+  apiDocs: {
+    title: 'API Documentation',
+    subtitle: 'Public REST API reference for air quality data',
+    comingSoon:
+      'The public API is currently under development. Below is a preview of the planned endpoints.',
+    baseUrl: 'Base URL',
+    authentication: 'Authentication',
+    authNote:
+      'API keys will be required for write operations. Read-only endpoints will be publicly accessible with rate limiting.',
+    endpoints: 'Endpoints',
+    sensors: 'Sensors',
+    neighborhoods: 'Neighborhoods',
+    aqiLabel: 'AQI',
+    exportLabel: 'Export',
+    websocket: 'WebSocket',
+    rateLimiting: 'Rate Limiting',
+    rateLimitNote:
+      'Public endpoints are limited to 100 requests per minute per IP. Authenticated requests have higher limits.',
+    parameter: 'Parameter',
+    type: 'Type',
+    required: 'Required',
+    description: 'Description',
+    exampleResponse: 'Example Response',
+    yes: 'Yes',
+    no: 'No',
   },
   common: {
     loading: 'Loading...',

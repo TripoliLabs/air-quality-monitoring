@@ -1,6 +1,16 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* PrimeIcons */
+@import 'primeicons/primeicons.css';
+
+@layer tailwind-base, primevue, tailwind-utilities;
+
+@layer tailwind-base {
+  @tailwind base;
+}
+
+@layer tailwind-utilities {
+  @tailwind components;
+  @tailwind utilities;
+}
 
 /* Base resets for full viewport */
 @layer base {
@@ -16,7 +26,7 @@
   }
 
   body {
-    @apply bg-gray-100 text-gray-900;
+    @apply bg-gray-950 text-gray-100;
     font-family:
       system-ui,
       -apple-system,
@@ -47,6 +57,31 @@
   font-family: inherit;
 }
 
+/* MapLibre dark mode popup styles */
+.maplibregl-popup-content {
+  background: #1f2937 !important;
+  color: #f3f4f6 !important;
+  border-radius: 0.5rem !important;
+  padding: 0.75rem 1rem !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid #374151 !important;
+}
+
+.maplibregl-popup-tip {
+  border-top-color: #1f2937 !important;
+}
+
+.maplibregl-popup-close-button {
+  color: #9ca3af !important;
+  font-size: 1.25rem !important;
+  padding: 0.25rem 0.5rem !important;
+}
+
+.maplibregl-popup-close-button:hover {
+  color: #f3f4f6 !important;
+  background: transparent !important;
+}
+
 /* AQI color classes */
 .aqi-good {
   background-color: var(--color-good);
@@ -73,4 +108,10 @@
 .aqi-hazardous {
   background-color: var(--color-hazardous);
   color: white;
+}
+
+/* Gradient accent divider for header/footer */
+.gradient-accent {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #10b981aa, #0ea5e9aa, #10b981aa, transparent);
 }
