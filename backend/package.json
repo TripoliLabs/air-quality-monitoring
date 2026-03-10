@@ -17,7 +17,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "biome:check": "biome check .",
     "biome:fix": "biome check --write .",
-    "tsc": "tsc"
+    "tsc": "tsc",
+    "db:migrate:run": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run",
+    "db:migrate:revert": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:revert",
+    "db:migrate:show": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:show",
+    "db:seed:dev": "bun run src/database/seeds/dev.seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

@@ -4,7 +4,17 @@
  * Stored in TimescaleDB hypertable for efficient time-series queries
  */
 
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Sensor } from './sensor.entity';
 
 @Entity('readings')
 @Index(['sensorId', 'timestamp'])
@@ -12,11 +22,19 @@ export class Reading {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column()
+  @Column({ type: 'uuid' })
   @Index()
   sensorId!: string;
 
-  @Column('timestamptz')
+  @ManyToOne(
+    () => Sensor,
+    (sensor) => sensor.readings,
+    { onDelete: 'CASCADE' },
+  )
+  @JoinColumn({ name: 'sensorId' })
+  sensor!: Sensor;
+
+  @PrimaryColumn('timestamptz')
   @Index()
   timestamp!: Date;
 
@@ -56,8 +74,4 @@ export class Reading {
 
   @CreateDateColumn()
   createdAt!: Date;
-
-  // Relations
-  // @ManyToOne(() => Sensor, (sensor) => sensor.readings)
-  // sensor: Sensor;
 }

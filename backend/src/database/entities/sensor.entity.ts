@@ -8,9 +8,11 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Reading } from './reading.entity';
 
 @Entity('sensors')
 export class Sensor {
@@ -54,7 +56,9 @@ export class Sensor {
   @UpdateDateColumn()
   updatedAt!: Date;
 
-  // Relations
-  // @OneToMany(() => Reading, (reading) => reading.sensor)
-  // readings: Reading[];
+  @OneToMany(
+    () => Reading,
+    (reading) => reading.sensor,
+  )
+  readings!: Reading[];
 }

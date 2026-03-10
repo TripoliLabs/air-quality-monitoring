@@ -32,7 +32,7 @@ import { HealthModule } from './health/health.module';
         password: configService.get('DB_PASSWORD', 'airquality'),
         database: configService.get('DB_NAME', 'airquality'),
         autoLoadEntities: true,
-        synchronize: configService.get('NODE_ENV') !== 'production',
+        synchronize: false,
         logging: configService.get('NODE_ENV') !== 'production',
       }),
     }),
