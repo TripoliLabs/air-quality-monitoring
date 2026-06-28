@@ -545,6 +545,9 @@ benchmark-results/
 *.dmp
 core
 crash/
+# ...but firmware/core/ is the portable firmware source, not a crash dump.
+!firmware/core/
+!firmware/core/**
 
 # System files
 .Spotlight-V100
