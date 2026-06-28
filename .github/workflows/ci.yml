@@ -46,7 +46,11 @@ jobs:
       - name: Firmware host tests
         run: make -C firmware test
 
-  # Build the Docker images and run the integration + e2e tests against the live stack.
+  # Slim integration: the API + ingestion services against their real backing
+  # stores (Postgres, TimescaleDB, Redis, NanoMQ). `up api ingestion` pulls in
+  # only those via depends_on — NOT the heavy/flaky ChirpStack + simulator +
+  # dashboard. The full-stack e2e smoke (scripts/e2e-smoke.sh) and the ESP32
+  # cross-compile (scripts/firmware-esp32-build.sh) are run locally; see CLAUDE.md.
   integration:
     runs-on: ubuntu-latest
     steps:
@@ -64,23 +68,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The integration tests import the shared packages (e.g. @aq/telemetry-codec).
       - name: Build workspace packages
-        run: pnpm run build
+        run: pnpm --filter "./packages/*" build
 
-      - name: Build images and start the stack
-        run: docker compose up -d --build
+      - name: Start the slim stack (api + ingestion + their stores + migrations)
+        run: docker compose up -d --build api ingestion
 
-      - name: Wait for the pipeline to warm up
-        run: sleep 45
+      - name: Wait for the API to be healthy
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:3000/health && break
+            sleep 2
+          done
 
       - name: API integration tests
         run: pnpm --filter @aq/api run test:integration
 
       - name: Ingestion integration tests
         run: pnpm --filter @aq/ingestion run test:integration
-
-      - name: End-to-end smoke test
-        run: bash scripts/e2e-smoke.sh
 
       - name: Dump logs on failure
         if: failure()
@@ -89,11 +95,3 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
-
-  # Cross-compile the on-target ESP32 firmware in the official ESP-IDF container.
-  firmware-esp32:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cross-compile ESP32 firmware
-        run: bash scripts/firmware-esp32-build.sh

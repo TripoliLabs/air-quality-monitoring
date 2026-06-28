@@ -262,15 +262,20 @@ lefthook install                   # Reinstall hooks
 
 ### CI (GitHub Actions)
 
-CI is configured in `.github/workflows/ci.yml` as three jobs:
+CI (`.github/workflows/ci.yml`) is intentionally lean — fast, deterministic checks
+only. Two jobs:
 
 - **quality** — `pnpm install` → `lint` → `typecheck` → `build` → `pnpm test` (unit)
   → `make -C firmware test` (firmware host tests). Turbo caches unchanged packages.
-- **integration** — `docker compose up -d --build` (validates every Dockerfile),
-  then the API + ingestion integration tests and the e2e smoke against the live
-  stack, then `docker compose down -v`.
-- **firmware-esp32** — cross-compiles the on-target ESP32 image via
-  `scripts/firmware-esp32-build.sh` (official ESP-IDF container).
+- **integration** — a **slim** stack: `docker compose up -d --build api ingestion`
+  brings up only the API + ingestion + their stores (Postgres, TimescaleDB, Redis,
+  NanoMQ) via `depends_on`, then runs the API + ingestion integration tests, then
+  `docker compose down -v`.
+
+**Run locally, not in CI** (too heavy/flaky or unverifiable on a shared runner):
+the full-stack e2e smoke (`bash scripts/e2e-smoke.sh` against the whole
+ChirpStack + simulator pipeline) and the ESP32 cross-compile
+(`scripts/firmware-esp32-build.sh`). See the Testing section.
 
 ## Key Design Decisions
 
