@@ -7,7 +7,9 @@ pre-commit:
     # Backend / packages — Biome (apps/api, services/*, packages/*)
     backend-lint:
       glob: "{apps/api,services,packages}/**/*.{ts,js}"
-      run: pnpm exec biome check --write {staged_files} && git add {staged_files}
+      # --no-errors-on-unmatched: staged files outside Biome's `src/**` scope
+      # (e.g. test/ files) are skipped instead of failing the hook.
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files} && git add {staged_files}
       stage_fixed: true
 
     # Dashboard — ESLint + Prettier
