@@ -39,7 +39,9 @@ export const ChirpStackUplinkSchema = z.object({
   fCnt: z.number().int().optional(),
   /** base64-encoded frmPayload (the raw LoRa application bytes). */
   data: z.string(),
-  time: z.iso.datetime().optional(),
+  // ChirpStack emits RFC3339 with nanosecond precision; accept any string and
+  // normalise it in the consumer rather than enforcing strict ISO here.
+  time: z.string().optional(),
   rxInfo: z
     .array(
       z.object({

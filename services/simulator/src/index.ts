@@ -1,41 +1,70 @@
 /**
- * Simulated LoRaWAN deployment.
+ * Simulated LoRaWAN deployment — the truest local path, with a real OTAA join.
  *
- * For each fixture node it RUNS THE NODE FIRMWARE (the host build of the real
- * ESP32 application code, `firmware/build/aq-node-sim`) to sample its simulated
- * PMS7003 + BME280 and produce the base64 uplink payload — i.e. the data
- * genuinely originates from the firmware, byte-for-byte what the device emits.
+ *   firmware (real C app code, host build)  →  payload bytes
+ *      → device MAC: OTAA Join Request → Join Accept → derive session keys
+ *                    then Unconfirmed Data Up (encrypt + MIC)        (lora-packet)
+ *      → gateway: Semtech UDP packet forwarder (uplink + downlink)   (gateway.ts)
+ *      → chirpstack-gateway-bridge  →  ChirpStack (join server, decrypt, dedupe)
+ *      → MQTT application uplink  →  ingestion → TimescaleDB + Redis → API → dashboard
  *
- * It then wraps that payload in a ChirpStack v4 application-uplink envelope
- * (multiple gateways in rxInfo to mimic aggregation) and publishes it to MQTT.
- * This injects at ChirpStack's application-integration boundary — exactly what a
- * provisioned ChirpStack emits after gateway + network-server processing, which
- * is what the ingestion service consumes. (The LoRa RF hop is the hardware
- * boundary; true RF-layer simulation would use chirpstack-simulator.)
+ * On startup it provisions ChirpStack (application, OTAA device-profile, gateway,
+ * devices + root AppKeys), persists the root credentials to a Docker volume
+ * (never the repo), then performs an OTAA join per device before streaming data.
  */
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { SENSOR_FIXTURES } from '@aq/db';
-import { connect } from 'mqtt';
+import { provision } from './chirpstack';
+import { SemtechGateway } from './gateway';
+import {
+  buildJoinRequest,
+  buildUplink,
+  type DeviceCredentials,
+  type DeviceSession,
+  deriveSession,
+  newDevNonce,
+} from './lorawan';
 
 const execFileAsync = promisify(execFile);
 
-const MQTT_URL = process.env.MQTT_URL ?? 'mqtt://localhost:1883';
+const GRPC_ADDR = process.env.CHIRPSTACK_GRPC ?? 'chirpstack:8080';
+const REST_BASE = process.env.CHIRPSTACK_REST ?? 'http://chirpstack-rest-api:8090';
+const USER = process.env.CHIRPSTACK_USER ?? 'admin';
+const PASS = process.env.CHIRPSTACK_PASS ?? 'admin';
+const GATEWAY_EUI = process.env.GATEWAY_EUI ?? 'ac1f09fffe000101';
+const BRIDGE_HOST = process.env.GATEWAY_BRIDGE_HOST ?? 'chirpstack-gateway-bridge';
+const BRIDGE_PORT = Number(process.env.GATEWAY_BRIDGE_PORT ?? 1700);
+const KEYS_DIR = process.env.KEYS_DIR ?? '/keys';
 const INTERVAL_MS = Number(process.env.SIM_INTERVAL_MS ?? 15000);
-const APP_ID = process.env.SIM_APP_ID ?? '00000000-0000-0000-0000-000000000001';
 const FIRMWARE_BIN = process.env.FIRMWARE_BIN ?? '../../firmware/build/aq-node-sim';
-
-const GATEWAYS = ['ac1f09fffe000101', 'ac1f09fffe000102'];
-
-const fcnt = new Map<string, number>(SENSOR_FIXTURES.map((f) => [f.deviceId, 0]));
 
 const log = (o: Record<string, unknown>): void =>
   console.log(JSON.stringify({ service: 'simulator', ...o }));
-
 const rand = (min: number, max: number): number => min + Math.random() * (max - min);
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** Run the node firmware to produce this node's uplink payload (base64). */
-async function sampleFirmware(baselinePm25: number, hour: number, fc: number): Promise<string> {
+type CredStore = Record<string, Omit<DeviceCredentials, 'devEui'>>;
+
+function loadCreds(): CredStore {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(KEYS_DIR, 'devices.json'), 'utf8')) as CredStore;
+  } catch {
+    return {};
+  }
+}
+
+function saveCreds(devices: DeviceCredentials[]): void {
+  fs.mkdirSync(KEYS_DIR, { recursive: true });
+  const store: CredStore = Object.fromEntries(
+    devices.map((d) => [d.devEui, { joinEui: d.joinEui, appKey: d.appKey }]),
+  );
+  fs.writeFileSync(path.join(KEYS_DIR, 'devices.json'), JSON.stringify(store, null, 2));
+}
+
+async function sampleFirmware(baselinePm25: number, hour: number, fCnt: number): Promise<Buffer> {
   const { stdout } = await execFileAsync(
     FIRMWARE_BIN,
     [
@@ -44,82 +73,110 @@ async function sampleFirmware(baselinePm25: number, hour: number, fc: number): P
       '--hour',
       hour.toFixed(2),
       '--fcnt',
-      String(fc),
+      String(fCnt),
       '--seed',
-      String(fc * 7 + Math.floor(baselinePm25)),
+      String(fCnt * 7 + Math.floor(baselinePm25)),
     ],
     { timeout: 5000 },
   );
-  return stdout.trim();
+  return Buffer.from(stdout.trim(), 'base64');
 }
 
-const client = connect(MQTT_URL);
+async function provisionWithRetry(existing: CredStore): Promise<DeviceCredentials[]> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const result = await provision({
+        grpcAddr: GRPC_ADDR,
+        restBase: REST_BASE,
+        user: USER,
+        pass: PASS,
+        gatewayEui: GATEWAY_EUI,
+        fixtures: SENSOR_FIXTURES.map((f) => ({ deviceId: f.deviceId, name: f.name })),
+        existingCreds: existing,
+      });
+      log({ level: 'info', msg: 'provisioned ChirpStack (OTAA)', devices: result.devices.length });
+      return result.devices;
+    } catch (err) {
+      if (attempt >= 30) throw err;
+      log({ level: 'warn', msg: 'provision retry', attempt, error: String(err) });
+      await sleep(3000);
+    }
+  }
+}
 
-client.on('connect', () => {
-  log({
-    level: 'info',
-    msg: 'connected',
-    url: MQTT_URL,
-    nodes: SENSOR_FIXTURES.length,
-    firmware: FIRMWARE_BIN,
-    intervalMs: INTERVAL_MS,
-  });
-  void tick();
+/** Perform an OTAA join: Join Request → wait for Join Accept → derive session keys. */
+async function joinDevice(
+  gateway: SemtechGateway,
+  cred: DeviceCredentials,
+): Promise<DeviceSession> {
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const devNonce = newDevNonce();
+    gateway.uplink(buildJoinRequest(cred, devNonce), rand(-95, -60), rand(2, 9));
+    try {
+      const joinAccept = await gateway.waitForDownlink(8000);
+      return deriveSession(cred, devNonce, joinAccept);
+    } catch {
+      log({ level: 'warn', msg: 'OTAA join retry', devEui: cred.devEui, attempt });
+    }
+  }
+  throw new Error(`OTAA join failed for ${cred.devEui}`);
+}
+
+async function main(): Promise<void> {
+  const creds = await provisionWithRetry(loadCreds());
+  saveCreds(creds);
+
+  const gateway = new SemtechGateway(BRIDGE_HOST, BRIDGE_PORT, GATEWAY_EUI);
+  gateway.start();
+  await sleep(1000); // let the PULL_DATA route establish
+
+  // Join every device (sequential — one Join Accept downlink at a time).
+  const sessions: DeviceSession[] = [];
+  for (const cred of creds) {
+    const session = await joinDevice(gateway, cred);
+    log({
+      level: 'info',
+      msg: 'device joined (OTAA)',
+      devEui: session.devEui,
+      devAddr: session.devAddr,
+    });
+    sessions.push(session);
+  }
+
+  const baseline = new Map(SENSOR_FIXTURES.map((f) => [f.deviceId, f.baselinePm25]));
+  const fCnt = new Map(sessions.map((s) => [s.devEui, 0]));
+
+  async function tick(): Promise<void> {
+    const hour = new Date().getHours() + new Date().getMinutes() / 60;
+    let sent = 0;
+    await Promise.all(
+      sessions.map(async (session) => {
+        const fc = (fCnt.get(session.devEui) ?? 0) + 1;
+        fCnt.set(session.devEui, fc);
+        try {
+          const payload = await sampleFirmware(baseline.get(session.devEui) ?? 30, hour, fc);
+          gateway.uplink(buildUplink(session, fc, payload), rand(-110, -55), rand(-6, 9));
+          sent += 1;
+        } catch (err) {
+          log({ level: 'error', msg: 'uplink failed', devEui: session.devEui, error: String(err) });
+        }
+      }),
+    );
+    log({ level: 'info', msg: 'tick: data uplinks sent', sent });
+  }
+
+  await tick();
   setInterval(() => void tick(), INTERVAL_MS);
-});
 
-client.on('error', (err) => log({ level: 'error', msg: 'mqtt error', error: String(err) }));
-
-async function tick(): Promise<void> {
-  const hour = new Date().getHours() + new Date().getMinutes() / 60;
-  let published = 0;
-
-  await Promise.all(
-    SENSOR_FIXTURES.map(async (node) => {
-      const fc = (fcnt.get(node.deviceId) ?? 0) + 1;
-      fcnt.set(node.deviceId, fc);
-      try {
-        const data = await sampleFirmware(node.baselinePm25, hour, fc);
-
-        // Multiple gateways heard this uplink (aggregation) — strongest first.
-        const rxInfo = GATEWAYS.filter(() => Math.random() > 0.25).map((gatewayId) => ({
-          gatewayId,
-          rssi: Math.round(rand(-110, -55)),
-          snr: Number(rand(-6, 9).toFixed(1)),
-        }));
-        if (rxInfo.length === 0) rxInfo.push({ gatewayId: GATEWAYS[0], rssi: -95, snr: 2 });
-        rxInfo.sort((a, b) => b.rssi - a.rssi);
-
-        const uplink = {
-          deviceInfo: { devEui: node.deviceId, deviceName: node.name, applicationId: APP_ID },
-          fPort: 2,
-          fCnt: fc,
-          data,
-          time: new Date().toISOString(),
-          rxInfo,
-        };
-        client.publish(
-          `application/${APP_ID}/device/${node.deviceId}/event/up`,
-          JSON.stringify(uplink),
-          { qos: 0 },
-        );
-        published += 1;
-      } catch (err) {
-        log({
-          level: 'error',
-          msg: 'firmware sample failed',
-          deviceId: node.deviceId,
-          error: String(err),
-        });
-      }
-    }),
-  );
-
-  log({ level: 'info', msg: 'tick: published uplinks', published });
+  const shutdown = (): void => {
+    gateway.close();
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
-const shutdown = (): void => {
-  client.end(true, undefined, () => process.exit(0));
-};
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+main().catch((err) => {
+  log({ level: 'error', msg: 'fatal', error: String(err) });
+  process.exit(1);
+});

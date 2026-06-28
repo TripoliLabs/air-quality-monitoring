@@ -100,7 +100,7 @@ Lebanon faces severe air quality challenges from:
          │
 ┌────────▼────────┐
 │  LoRa Gateways  │  3-5 gateways cover entire city
-│  (RAK7268)      │  Forward packets to network server
+│  (DLOS8N, 4G)   │  Forward packets to network server
 └────────┬────────┘
          │ Internet (UDP/MQTT)
          │
@@ -323,7 +323,7 @@ will be added under `docs/` as the platform matures.
 
 | Item | Cost |
 |------|------|
-| RAK7268 WisGate Edge Lite 2 (8-ch gateway) | $139-180 |
+| Dragino DLOS8N (8-ch SX1302, EU868, EC25-E 4G) | ~$200 |
 | DigitalOcean hosting | $24/month |
 | Domain name | $12/year |
 | **Total monthly** | **~$25-30** |

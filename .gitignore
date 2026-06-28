@@ -558,3 +558,13 @@ crash/
 
 # firmware host build artifacts
 firmware/build/
+
+# LoRaWAN session keys (kept in a Docker volume, never committed)
+**/devices.json
+**/.lorawan*
+
+# ESP-IDF generated
+firmware/build-esp32/
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/managed_components/

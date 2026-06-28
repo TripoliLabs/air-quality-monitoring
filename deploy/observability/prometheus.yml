@@ -7,7 +7,10 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'backend'
+  # OpenTelemetry Prometheus exporters (see @aq/observability initTelemetry).
+  - job_name: 'api'
     static_configs:
-      - targets: ['backend:3000']
-    metrics_path: /metrics
+      - targets: ['api:9464']
+  - job_name: 'ingestion'
+    static_configs:
+      - targets: ['ingestion:9464']

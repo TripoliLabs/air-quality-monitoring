@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@aq/db": "workspace:*",
-    "mqtt": "^5.0.0"
+    "@chirpstack/chirpstack-api": "^4.0.0",
+    "@grpc/grpc-js": "^1.10.0",
+    "lora-packet": "^0.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

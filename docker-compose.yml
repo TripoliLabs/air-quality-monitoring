@@ -110,23 +110,51 @@ services:
     container_name: airquality-chirpstack
     restart: unless-stopped
     command: -c /etc/chirpstack
-    # NOTE: gateway config moves to edge/chirpstack/ during the migration.
     volumes:
       - ./edge/chirpstack:/etc/chirpstack:ro
     ports:
-      - "8080:8080"     # Web UI / gRPC-web API
-      - "1700:1700/udp" # Semtech UDP packet forwarder
-    # ChirpStack stores its own state in the RELATIONAL Postgres (it does not
-    # need TimescaleDB). Connection + Redis are configured in
-    # edge/chirpstack/chirpstack.toml (ChirpStack reads the toml, not env
-    # overrides); that DSN points at the `postgres` service. Requires pg_trgm
-    # (added via the postgres init script).
+      - "8080:8080" # Web UI / gRPC + gRPC-web API
+    # ChirpStack stores its own state in the relational Postgres (configured in
+    # edge/chirpstack/chirpstack.toml). It talks to gateways over MQTT via the
+    # gateway backend in edge/chirpstack/region_eu868.toml (topic prefix eu868).
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       mqtt:
+        condition: service_started
+
+  # ChirpStack Gateway Bridge — receives the Semtech UDP packet-forwarder
+  # protocol from gateways (port 1700) and bridges it to ChirpStack over MQTT.
+  # This is exactly how a real RAK7268 gateway connects.
+  chirpstack-gateway-bridge:
+    image: chirpstack/chirpstack-gateway-bridge:4
+    container_name: airquality-gateway-bridge
+    restart: unless-stopped
+    ports:
+      - "1700:1700/udp" # Semtech UDP packet forwarder
+    environment:
+      INTEGRATION__MARSHALER: json
+      INTEGRATION__MQTT__AUTH__GENERIC__SERVERS: tcp://mqtt:1883
+      INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}"
+      INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}"
+      INTEGRATION__MQTT__COMMAND_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/command/#"
+    depends_on:
+      mqtt:
+        condition: service_started
+
+  # REST/JSON gateway for the ChirpStack gRPC API — used by the simulator to
+  # provision the application, device-profile, gateway and devices.
+  chirpstack-rest-api:
+    image: chirpstack/chirpstack-rest-api:4
+    container_name: airquality-chirpstack-rest
+    restart: unless-stopped
+    command: --server chirpstack:8080 --bind 0.0.0.0:8090 --insecure
+    ports:
+      - "8090:8090"
+    depends_on:
+      chirpstack:
         condition: service_started
 
   # ===========================================================================
@@ -140,7 +168,7 @@ services:
     restart: unless-stopped
     profiles: ["observability"]
     ports:
-      - "3001:3000"
+      - "3002:3000" # host 3001 is taken by the ingestion service
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
@@ -173,6 +201,22 @@ services:
       - "3100:3100"
     volumes:
       - loki_data:/loki
+
+  # Tempo — traces backend; receives OTLP/HTTP on :4318 from the services.
+  # Enable trace export by setting OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+  # when bringing up the stack with this profile.
+  tempo:
+    image: grafana/tempo:2
+    container_name: airquality-tempo
+    restart: unless-stopped
+    profiles: ["observability"]
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "3200:3200" # Tempo query API (Grafana datasource)
+      - "4318:4318" # OTLP/HTTP receiver
+    volumes:
+      - ./deploy/observability/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
 
   # ===========================================================================
   # Migrations — one-shot, runs to completion before the apps start.
@@ -231,6 +275,9 @@ services:
       REDIS_URL: redis://redis:6379
       MQTT_URL: mqtt://mqtt:1883
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      # OpenTelemetry: metrics are always exposed on :9464; set the OTLP endpoint
+      # (e.g. http://tempo:4318) to also export traces — see the observability profile.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       CHOKIDAR_USEPOLLING: "true" # reliable file-watching across the bind mount
     volumes:
       - ./apps/api:/repo/apps/api
@@ -264,6 +311,7 @@ services:
       TSDB_NAME: ${TSDB_NAME:-telemetry}
       MQTT_URL: mqtt://mqtt:1883
       REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./services/ingestion:/repo/services/ingestion
@@ -310,21 +358,49 @@ services:
     container_name: airquality-simulator
     restart: unless-stopped
     environment:
-      MQTT_URL: mqtt://mqtt:1883
+      CHIRPSTACK_GRPC: chirpstack:8080
+      CHIRPSTACK_REST: http://chirpstack-rest-api:8090
+      GATEWAY_BRIDGE_HOST: chirpstack-gateway-bridge
+      GATEWAY_BRIDGE_PORT: "1700"
+      GATEWAY_EUI: ac1f09fffe000101
+      KEYS_DIR: /keys
       SIM_INTERVAL_MS: "15000"
+    volumes:
+      # LoRaWAN session keys live in a Docker volume — never the repo.
+      - lorawan_keys:/keys
     depends_on:
-      mqtt:
+      chirpstack-rest-api:
+        condition: service_started
+      chirpstack-gateway-bridge:
         condition: service_started
       ingestion:
         condition: service_started
+
+  # ===========================================================================
+  # ESP32 firmware cross-compile — ONE-SHOT build (profile: firmware).
+  # Firmware is chip code, not a long-running service, so it is built on demand,
+  # not "up"-ed. Cross-compiles the same firmware/core/ that the host build uses.
+  #   docker compose --profile firmware run --rm firmware-esp32
+  #   → firmware/build-esp32/aq-node.bin
+  # ===========================================================================
+  firmware-esp32:
+    image: espressif/idf:release-v5.2
+    container_name: airquality-firmware-esp32
+    profiles: ["firmware"]
+    working_dir: /project
+    volumes:
+      - ./firmware:/project
+    command: idf.py -B build-esp32 set-target esp32 build
 
 volumes:
   postgres_data:
   timescaledb_data:
   redis_data:
+  lorawan_keys:
   grafana_data:
   prometheus_data:
   loki_data:
+  tempo_data:
 
 networks:
   default:

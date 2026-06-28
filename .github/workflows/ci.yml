@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  # Lint, typecheck, build, and the fast unit/firmware tests (no services needed).
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +30,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Turbo runs each task across the workspace in dependency order, caching
-      # unchanged packages. Build compiles + typechecks every app/package.
+      # unchanged packages.
       - name: Lint
         run: pnpm run lint
 
@@ -38,3 +39,61 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Firmware host tests
+        run: make -C firmware test
+
+  # Build the Docker images and run the integration + e2e tests against the live stack.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm run build
+
+      - name: Build images and start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for the pipeline to warm up
+        run: sleep 45
+
+      - name: API integration tests
+        run: pnpm --filter @aq/api run test:integration
+
+      - name: Ingestion integration tests
+        run: pnpm --filter @aq/ingestion run test:integration
+
+      - name: End-to-end smoke test
+        run: bash scripts/e2e-smoke.sh
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail 200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # Cross-compile the on-target ESP32 firmware in the official ESP-IDF container.
+  firmware-esp32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cross-compile ESP32 firmware
+        run: bash scripts/firmware-esp32-build.sh

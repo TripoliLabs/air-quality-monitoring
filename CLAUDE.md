@@ -84,7 +84,7 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 **PM Sensor:** Plantower PMS7003 - $11.50-12
 **Environment Sensor:** BME280 (temperature/humidity/pressure) - $2.50-3
 **Power:** 5V 2W USB Solar Panel + Samsung INR18650-30Q 3000mAh + TP4056 charger
-**Gateways:** RAK7268 WisGate Edge Lite 2 (8-ch SX1302) - $139-180
+**Gateways:** Dragino DLOS8N (EU868) — outdoor 8-ch SX1302, EC25-E 4G/LTE backhaul (resilient to wired-internet outages); supports Semtech UDP packet forwarder + Basic Station
 **Enclosure:** SZOMK IP67 Waterproof Box (130×90×25mm)
 **Node Cost:** ~$56-65 per sensor node
 
@@ -131,14 +131,23 @@ packages compile to `dist/`; Turbo builds them before the apps that depend on th
 
 ## Development Commands
 
-### Firmware (ESP32)
+### Firmware
+
+The firmware is ports & adapters: a portable `core/` (sensor HAL + payload codec)
+shared by the **host build** (used by the simulator + host unit tests) and the
+**on-target ESP32 build**.
 
 ```bash
-cd firmware
-pio run                    # Build firmware
-pio run --target upload    # Flash to ESP32
-pio device monitor         # View serial output
-pio test                   # Run tests
+# Host (gcc) — portable core + simulated drivers; runs the unit tests:
+make -C firmware test                 # host unit tests (Unity-style)
+make -C firmware host                 # build firmware/build/aq-node-sim
+
+# On-target ESP32 — cross-compile in the official ESP-IDF container (no local
+# ESP-IDF install needed). Verifies the on-target build; run in CI on changes:
+scripts/firmware-esp32-build.sh       # → firmware/build-esp32/aq-node.bin
+
+# With a local PlatformIO/ESP-IDF install, the classic flow also works:
+cd firmware && pio run                # build · pio run -t upload · pio device monitor
 ```
 
 ### Monorepo (pnpm + Turborepo, from the repo root)
@@ -150,7 +159,7 @@ pnpm typecheck                                 # turbo: typecheck across the wor
 pnpm lint                                      # turbo: Biome (backend) + ESLint (dashboard)
 
 # Run a single app/service (Node runtime, hot reload):
-pnpm --filter @aq/api start:dev                # NestJS API        → :3000
+pnpm --filter @aq/api start:dev                # NestJS API        → :3000  (OpenAPI UI at /docs)
 pnpm --filter @aq/ingestion start:dev          # ingestion worker  → :3001
 pnpm --filter @aq/dashboard dev                # Vue dashboard     → :5173
 
@@ -174,15 +183,34 @@ pnpm --filter @aq/api run test:integration       # API endpoints against the liv
 pnpm --filter @aq/ingestion run test:integration # publish an uplink → assert decode/persist/cache
 ```
 
-### Local simulation (runs on real, firmware-produced data)
+### Local simulation — the truest path (real LoRaWAN through ChirpStack)
 
-`docker compose up -d` runs the whole pipeline live: the **`simulator`** spawns the
-node **firmware host build** (`firmware/build/aq-node-sim`, the real C sampling +
-payload-encode code with simulated PMS7003/BME280 drivers) per node, wraps each
-payload in a ChirpStack uplink, and publishes to MQTT → ingestion decodes
-(`@aq/telemetry-codec`) → TimescaleDB + Redis → API (REST + Socket.IO) → dashboard.
-The dashboard reads the backend through `apps/dashboard/src/services` (HTTP + WS),
-or falls back to the in-browser mock when `VITE_API_URL` is unset.
+`docker compose up -d` runs the whole pipeline live, exercising the **real
+LoRaWAN stack** end to end (only the RF hop is simulated):
+
+```
+firmware/build/aq-node-sim (real C app code, simulated PMS7003/BME280)
+  → payload bytes
+  → device MAC: OTAA Join Request → Join Accept → derive session keys,
+                then Unconfirmed Data Up (encrypt + MIC)  (lora-packet)   [services/simulator]
+  → gateway: Semtech UDP packet forwarder (uplink + downlink)             [services/simulator/gateway.ts]
+  → chirpstack-gateway-bridge (UDP :1700 → MQTT)
+  → ChirpStack v4 (join server, decrypt, MIC check, dedupe, network server)
+  → MQTT application uplink  → ingestion (@aq/telemetry-codec) → TimescaleDB + Redis
+  → API (REST + Socket.IO)   → dashboard
+```
+
+On startup the **`simulator`** provisions ChirpStack (application, EU868/OTAA
+device-profile, gateway, the 6 fixture devices + root AppKeys) over its gRPC/REST
+API, performs a real **OTAA join** per device, then streams data. Root AppKeys
+are stored in a **Docker volume (`lorawan_keys`), never the repo**. The dashboard
+reads the backend through `apps/dashboard/src/services` (HTTP + WS), or falls
+back to the in-browser mock when `VITE_API_URL` is unset.
+
+> ChirpStack config lives in `edge/chirpstack/` (`chirpstack.toml` +
+> `region_eu868.toml`). The gateway bridge + REST API are compose services.
+> Uses OTAA (over-the-air activation, LoRaWAN 1.0.3); first physical gateway is
+> the Dragino DLOS8N (EU868, 4G backhaul) — see edge/chirpstack/README.md.
 
 ### Docker (local dev backing services)
 
@@ -234,12 +262,15 @@ lefthook install                   # Reinstall hooks
 
 ### CI (GitHub Actions)
 
-CI is configured in `.github/workflows/ci.yml` as a single job that installs the
-workspace and runs Turbo across it: `pnpm install` → `pnpm lint` → `pnpm typecheck`
-→ `pnpm build`. Turbo runs each task in dependency order and caches unchanged
-packages, so only what actually changed is rebuilt.
+CI is configured in `.github/workflows/ci.yml` as three jobs:
 
-> **Note:** Docker build and integration tests will be added when deployment infrastructure is set up.
+- **quality** — `pnpm install` → `lint` → `typecheck` → `build` → `pnpm test` (unit)
+  → `make -C firmware test` (firmware host tests). Turbo caches unchanged packages.
+- **integration** — `docker compose up -d --build` (validates every Dockerfile),
+  then the API + ingestion integration tests and the e2e smoke against the live
+  stack, then `docker compose down -v`.
+- **firmware-esp32** — cross-compiles the on-target ESP32 image via
+  `scripts/firmware-esp32-build.sh` (official ESP-IDF container).
 
 ## Key Design Decisions
 

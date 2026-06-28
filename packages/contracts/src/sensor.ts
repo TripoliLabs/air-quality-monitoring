@@ -24,6 +24,31 @@ export const ReadingResponseSchema = SensorReadingSchema.extend({
 });
 export type ReadingResponse = z.infer<typeof ReadingResponseSchema>;
 
+/** One hour-bucketed point from the `readings_hourly` continuous aggregate. */
+export const HourlyBucketSchema = z.object({
+  sensorId: z.string(),
+  bucket: z.string(), // ISO timestamp (hour bucket)
+  avgPm25: z.number(),
+  avgPm10: z.number(),
+  avgTemperature: z.number(),
+  avgHumidity: z.number(),
+  maxAqi: z.number().int(),
+  sampleCount: z.number().int(),
+});
+export type HourlyBucket = z.infer<typeof HourlyBucketSchema>;
+
+/** Network-wide snapshot for the dashboard overview/stats bar. */
+export const NetworkOverviewSchema = z.object({
+  sensorsTotal: z.number().int(),
+  sensorsOnline: z.number().int(),
+  readingsLastHour: z.number().int(),
+  avgAqi: z.number().nullable(),
+  maxAqi: z.number().int().nullable(),
+  byCategory: z.record(z.string(), z.number().int()),
+  updatedAt: z.string(),
+});
+export type NetworkOverview = z.infer<typeof NetworkOverviewSchema>;
+
 /** Public sensor metadata (relational DB). */
 export const SensorSchema = z.object({
   id: z.string(),

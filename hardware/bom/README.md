@@ -19,7 +19,7 @@ This directory contains the bill of materials for air quality sensor nodes.
 
 | Component | Part | Cost (USD) |
 |-----------|------|------------|
-| Gateway | RAK7268 WisGate Edge Lite 2 | $139-180 |
+| Gateway | Dragino DLOS8N (EU868, 4G backhaul) | ~$200 |
 
 ## Deployment Estimates
 

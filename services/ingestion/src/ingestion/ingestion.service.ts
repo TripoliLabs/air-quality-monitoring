@@ -8,7 +8,7 @@ import { calculateAqi } from '@aq/domain';
 import { createLogger } from '@aq/observability';
 import { decodeUplink } from '@aq/telemetry-codec';
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { connect, type MqttClient } from 'mqtt';
 
@@ -62,11 +62,17 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       const decoded = decodeUplink(bytes);
       const rssi = uplink.rxInfo?.[0]?.rssi;
 
+      // Normalise ChirpStack's RFC3339 time (nanosecond precision) to strict ISO.
+      const parsed = uplink.time ? new Date(uplink.time) : new Date();
+      const timestamp = Number.isNaN(parsed.getTime())
+        ? new Date().toISOString()
+        : parsed.toISOString();
+
       // 3) Compute AQI and validate against the shared contract.
       const aqi = calculateAqi(decoded.pm25, decoded.pm10);
       const reading = SensorReadingSchema.parse({
         deviceId,
-        timestamp: uplink.time ?? new Date().toISOString(),
+        timestamp,
         pm25: decoded.pm25,
         pm10: decoded.pm10,
         temperature: decoded.temperature,

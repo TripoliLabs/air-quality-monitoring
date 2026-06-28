@@ -1,8 +1,16 @@
 /**
- * Shared observability helpers. Kept dependency-free for now; wire the real
- * OpenTelemetry SDK (traces → Tempo, metrics → Mimir, logs → Loki) here so every
- * service is instrumented consistently. See deploy/observability/.
+ * Shared observability helpers: a structured JSON logger and the OpenTelemetry
+ * SDK bootstrap (traces → Tempo via OTLP, metrics → Prometheus scrape). Call
+ * initTelemetry() as the very first thing in a service's entrypoint so the
+ * auto-instrumentations can patch modules before they are imported.
+ * See deploy/observability/.
  */
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -28,7 +36,41 @@ export function createLogger(service: string): Logger {
   };
 }
 
-/** Placeholder for OpenTelemetry SDK bootstrap (no-op until wired). */
-export function initTelemetry(_service: string): void {
-  // TODO: configure @opentelemetry/sdk-node with OTLP exporters → Alloy/LGTM.
+let sdk: NodeSDK | undefined;
+
+/**
+ * Bootstrap OpenTelemetry for a service:
+ * - Metrics: a Prometheus exporter on `OTEL_PROMETHEUS_PORT` (default 9464, /metrics).
+ * - Traces: exported via OTLP/HTTP to `OTEL_EXPORTER_OTLP_ENDPOINT` when that env
+ *   is set (e.g. http://tempo:4318); otherwise tracing export is disabled so a
+ *   plain `docker compose up` (no observability profile) stays quiet.
+ * - Auto-instruments HTTP, Express, ioredis, pg, etc.
+ *
+ * Idempotent. Call once, first thing, in the service entrypoint.
+ */
+export function initTelemetry(service: string): void {
+  if (sdk || process.env.OTEL_SDK_DISABLED === 'true') return;
+
+  const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  const metricsPort = Number(process.env.OTEL_PROMETHEUS_PORT ?? 9464);
+
+  sdk = new NodeSDK({
+    resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: service }),
+    metricReader: new PrometheusExporter({ port: metricsPort }),
+    traceExporter: otlpEndpoint
+      ? new OTLPTraceExporter({ url: `${otlpEndpoint.replace(/\/$/, '')}/v1/traces` })
+      : undefined,
+    instrumentations: [
+      getNodeAutoInstrumentations({
+        '@opentelemetry/instrumentation-fs': { enabled: false },
+      }),
+    ],
+  });
+
+  sdk.start();
+  const shutdown = (): void => {
+    void sdk?.shutdown();
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 }
