@@ -1,0 +1,15 @@
+# pnpm workspace — https://pnpm.io/workspaces
+packages:
+  - 'apps/*'
+  - 'services/*'
+  - 'packages/*'
+
+# Catalogs (centralised dependency versions) can be introduced later:
+# catalog:
+#   typescript: ^5.9.0
+
+# pnpm 10+ blocks dependency build scripts by default; allow only the ones we trust.
+allowBuilds:
+  esbuild: true
+  lefthook: true
+  vue-demi: true

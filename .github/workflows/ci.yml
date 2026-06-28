@@ -6,99 +6,35 @@ on:
   pull_request:
     branches: [prod, staging]
 
-# Cancel in-progress runs for the same branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ==========================================================================
-  # Detect Changes
-  # ==========================================================================
-  changes:
+  ci:
     runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'backend/**'
-            frontend:
-              - 'frontend/**'
-
-  # ==========================================================================
-  # Backend
-  # ==========================================================================
-  backend:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4 # version read from package.json "packageManager"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 24
+          cache: pnpm
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
-      - name: Lint & Format
-        run: bun run biome:check
-
-      - name: Type Check
-        run: bun run tsc --noEmit
-
-      - name: Run Tests
-        run: bun run test --passWithNoTests
-
-      - name: Build
-        run: bun run build
-
-  # ==========================================================================
-  # Frontend
-  # ==========================================================================
-  frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
+      # Turbo runs each task across the workspace in dependency order, caching
+      # unchanged packages. Build compiles + typechecks every app/package.
       - name: Lint
-        run: bun run lint
+        run: pnpm run lint
 
-      - name: Format Check
-        run: bun run format:check
-
-      - name: Type Check
-        run: bun run vue-tsc --noEmit
-
-      - name: Run Tests
-        run: bun run test --passWithNoTests
+      - name: Typecheck
+        run: pnpm run typecheck
 
       - name: Build
-        run: bun run build
-
+        run: pnpm run build

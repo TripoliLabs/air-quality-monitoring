@@ -8,7 +8,11 @@ Open-source distributed air quality monitoring network for Tripoli, Lebanon usin
 
 **Organization:** TripoliLabs
 **License:** AGPL-3.0 (keeps project open source forever, prevents closed-source SaaS exploitation)
-**Status:** Planning/Initial Setup Phase
+**Status:** Monorepo restructure complete. The dashboard is built (runs on mock data); api/ingestion and shared packages are fresh, compiling scaffolds wired together (codec → contracts → domain → db). Next: real schema/migrations, then feature work.
+
+> **Canonical architecture & decisions:** see [`docs/architecture.md`](docs/architecture.md)
+> for the monorepo layout and the adopted ADRs (two-DB topology, Drizzle, Zod
+> contracts, pnpm+Node, Biome/ESLint split).
 
 ## Architecture Overview
 
@@ -23,44 +27,56 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
                                                 │
                           ┌─────────────────────┼─────────────────────┐
                           ↓                     ↓                     ↓
-                   TimescaleDB           Redis Pub/Sub          Redis Cache
-                   (persistence)         (real-time events)     (latest values)
-                          ↑                     ↓
-                          │            NestJS WebSocket Gateway
+                   TigerData             Redis Pub/Sub          Redis Cache
+                   (TimescaleDB:         (real-time events)     (latest values)
+                    readings)                  ↓
+                          ↑            NestJS WebSocket Gateway
                           │                     ↓
-                          └──── NestJS REST API ←── Vue.js Dashboard
+   DO Managed Postgres ───┤  NestJS REST API ←── Vue.js Dashboard
+   (relational metadata) ─┘  (reads both DBs; metadata joined in app layer)
 ```
 
 **Data paths:**
-- **Historical queries:** Vue.js → REST API → TimescaleDB
+- **Historical queries:** Vue.js → REST API → TigerData (telemetry) + DO Managed Postgres (metadata)
 - **Real-time updates:** Redis Pub/Sub → WebSocket Gateway → Vue.js (Socket.IO)
 - **Latest values:** Vue.js → REST API → Redis Cache
 
+> **Two managed databases** (see ADR-001): time-series readings live on **TigerData**
+> (managed TimescaleDB, full TSL — compression/continuous-aggregates/retention);
+> relational app data + ChirpStack state live on **DO Managed Postgres**. They do
+> not cross-join natively — readings are enriched with metadata in the app layer.
+
 ### Technology Stack
 
-**Runtime:** Node.js 24+ LTS (Krypton)
+**Runtime:** Node.js 24+ LTS (Krypton) — services run on Node, *not* the Bun runtime (ADR-003)
 **Language:** TypeScript 5.9+
 **Firmware:** C++ with ESP-IDF 5.x + PlatformIO (ESP32)
 **Network Server:** ChirpStack v4 (self-hosted LoRaWAN network server)
-**Message Broker:** EMQX Serverless (cloud-native MQTT)
+**Message Broker:** EMQX (production) · NanoMQ (local dev) — identical MQTT contract
 **Backend:** NestJS 11+ (modular Node.js framework)
-**Database:** TimescaleDB 2.x on PostgreSQL 16 (10-100x compression for time-series)
+**Telemetry DB:** TigerData / Tiger Cloud — managed TimescaleDB, full TSL edition (compression, continuous aggregates, retention)
+**Relational DB:** DigitalOcean Managed PostgreSQL 16 (app data + ChirpStack state)
+**DB access:** Drizzle ORM (both DBs; `--custom` SQL migrations for Timescale DDL) (ADR-001)
+**API contracts:** Zod 4 (shared package) + nestjs-zod → auto OpenAPI (ADR-002)
 **Cache/PubSub:** Redis 7.x (caching + Pub/Sub for real-time WebSocket broadcast)
 **Frontend:** Vue.js 3.5+ + Vite 7+ + Tailwind CSS
 **Maps:** MapLibre GL JS 4+ + OpenStreetMap tiles (open source, no API keys)
 **Charts:** Apache ECharts (better for real-time time-series data)
-**Monitoring:** Grafana + Prometheus + Loki
-**Orchestration:** Docker Compose
+**Observability:** Grafana LGTM stack (Loki, Grafana, Tempo, Mimir) + Prometheus + OpenTelemetry
+**Orchestration:** Docker Compose (local) · OpenTofu on DigitalOcean (cloud)
 
 ### Tooling
 
-**Package Manager:** Bun (7x faster than npm, all-in-one JS runtime)
-**Backend Linting:** Biome 2.0+ (Rust-based, replaces ESLint + Prettier)
-**Frontend Linting:** ESLint 9+ with eslint-plugin-vue (full Vue template support)
+**Package Manager:** pnpm 11+ (strict node_modules, catalogs, best-in-class Docker caching) (ADR-003)
+**Monorepo:** Turborepo (task graph + caching, affected-graph CI)
+**Backend Linting:** Biome 2.5+ (Rust-based, type-aware lint + formatter, replaces ESLint + Prettier)
+**Frontend Linting:** ESLint 9+ with eslint-plugin-vue (only tool with real Vue template analysis)
 **Frontend Formatting:** Prettier with prettier-plugin-tailwindcss
 **Git Hooks:** Lefthook (Go-based, fast parallel execution)
-**CI:** GitHub Actions (path-based job filtering)
+**CI:** GitHub Actions (Turbo affected-graph)
 **C++ Build:** PlatformIO (ESP32 ecosystem) + xmake (for dependencies)
+
+> Bun is *not* used to install or run code (ADR-003). It may optionally be used as a fast test runner (`bun test`) on shared packages.
 
 ### Hardware
 
@@ -74,37 +90,44 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 
 ## Project Structure
 
+pnpm + Turborepo monorepo. The frontend is the only pre-existing app (moved from
+`frontend/`); api/ingestion and the shared packages are fresh scaffolds.
+
 ```
 air-quality-monitoring/
-├── firmware/              # ESP32 C++ code (PlatformIO + ESP-IDF)
-│   ├── src/
-│   │   ├── main.cpp
-│   │   ├── sensors/      # PMS7003, BME280 drivers
-│   │   ├── lora/         # LoRaWAN communication
-│   │   └── power/        # Deep sleep management
-│   └── platformio.ini
-├── backend/               # NestJS services (TypeScript)
-│   ├── src/
-│   │   ├── ingestion/    # MQTT → Database pipeline
-│   │   ├── api/          # REST API modules
-│   │   ├── database/     # TypeORM entities, migrations
-│   │   └── common/       # Shared utilities, DTOs
-│   ├── package.json
-│   └── biome.json        # Linting/formatting config
-├── frontend/              # Vue.js + Vite dashboard
-│   ├── src/
-│   │   ├── components/   # Map, Charts, Widgets
-│   │   ├── views/        # Home, Sensor Detail, About
-│   │   └── i18n/         # Arabic + English translations
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── eslint.config.js  # ESLint flat config (Vue + TypeScript)
-├── gateway/               # ChirpStack configuration
-├── hardware/              # BOMs, schematics, assembly guides
-├── monitoring/            # Grafana dashboards
-├── docs/                  # Documentation
-└── docker-compose.yml     # Full stack orchestration
+├── apps/
+│   ├── dashboard/         # Vue 3 + Vite SPA  (@aq/dashboard, ESLint+Prettier)
+│   └── api/               # NestJS public REST + WS  (@aq/api, Biome)
+├── services/
+│   ├── ingestion/         # NestJS MQTT pipeline  (@aq/ingestion, Biome)
+│   └── simulator/         # simulated LoRaWAN deployment — runs the firmware per node (@aq/simulator)
+├── packages/              # shared TypeScript libraries (built to dist/ via tsc)
+│   ├── domain/            # @aq/domain — AQI calc, units, core types
+│   ├── contracts/         # @aq/contracts — Zod schemas (DTOs + events)
+│   ├── db/                # @aq/db — Drizzle: relational + telemetry clients/schema
+│   ├── telemetry-codec/   # @aq/telemetry-codec — LoRa payload spec + decoder
+│   └── observability/     # @aq/observability — logger / OTel init
+├── firmware/              # ESP32 firmware (ports & adapters)
+│   ├── core/              #   portable C: sensor HAL + payload codec (host- & target-buildable)
+│   ├── sim/               #   host adapter: simulated PMS7003/BME280 + entrypoint (used by the simulator)
+│   ├── adapters/esp32/    #   on-target drivers (PMS7003/BME280/LoRa)
+│   ├── test/              #   host unit tests (make test)
+│   └── platformio.ini     #   ESP-IDF build
+├── edge/
+│   └── chirpstack/        # ChirpStack v4 config (gateway)
+├── infra/                 # OpenTofu (DigitalOcean) — modules/ + environments/
+├── deploy/
+│   ├── observability/     # LGTM stack configs (Prometheus, Grafana provisioning)
+│   └── onprem/            # gateway-box provisioning (ansible/cloud-init)
+├── database/init/         # local Postgres init (pg_trgm for ChirpStack)
+├── mqtt/                  # local NanoMQ config
+├── hardware/ · docs/      # BOMs / documentation
+├── turbo.json · tsconfig.base.json · biome.json · pnpm-workspace.yaml
+└── docker-compose.yml     # local full-stack (data plane + api/ingestion/dashboard)
 ```
+
+Package scope is `@aq/*` (placeholder — may become `@tripolilabs/*`). Shared
+packages compile to `dist/`; Turbo builds them before the apps that depend on them.
 
 ## Development Commands
 
@@ -118,64 +141,79 @@ pio device monitor         # View serial output
 pio test                   # Run tests
 ```
 
-### Backend - NestJS (using Bun)
+### Monorepo (pnpm + Turborepo, from the repo root)
 
 ```bash
-cd backend
-bun install                # Install dependencies (7x faster than npm)
-bun run start:dev          # Start dev server with hot reload
-bun run build              # Build for production
-bun run start:prod         # Start production server
-bun test                   # Run tests
-bun run biome:check        # Lint and format check
-bun run biome:fix          # Auto-fix lint and format issues
+pnpm install                                   # install the whole workspace
+pnpm build                                     # turbo: build all packages + apps (in dep order)
+pnpm typecheck                                 # turbo: typecheck across the workspace
+pnpm lint                                      # turbo: Biome (backend) + ESLint (dashboard)
+
+# Run a single app/service (Node runtime, hot reload):
+pnpm --filter @aq/api start:dev                # NestJS API        → :3000
+pnpm --filter @aq/ingestion start:dev          # ingestion worker  → :3001
+pnpm --filter @aq/dashboard dev                # Vue dashboard     → :5173
+
+# Work on one package:
+pnpm --filter @aq/domain build                 # build a single package
+pnpm --filter @aq/api exec biome check src     # Biome on the API
 ```
 
-### Frontend - Vue.js (using Bun)
+Packages compile to `dist/` and apps import them from there, so build the
+packages before running an app on the host (`pnpm build`, or rely on Turbo).
+
+### Testing
 
 ```bash
-cd frontend
-bun install                # Install dependencies
-bun run dev                # Start dev server (http://localhost:5173)
-bun run build              # Build for production
-bun run preview            # Preview production build
-bun test                   # Run tests
-bun run lint               # ESLint check
-bun run lint:fix           # ESLint auto-fix
-bun run format             # Prettier format
-bun run format:check       # Prettier check
+pnpm test                                      # unit tests (Vitest): @aq/domain, @aq/telemetry-codec, @aq/contracts
+make -C firmware test                          # firmware C unit tests (host, gcc)
+bash scripts/e2e-smoke.sh                       # end-to-end smoke test (requires the stack up)
+
+# Integration tests (require `docker compose up -d`):
+pnpm --filter @aq/api run test:integration       # API endpoints against the live stack
+pnpm --filter @aq/ingestion run test:integration # publish an uplink → assert decode/persist/cache
 ```
 
-### Biome Commands (Backend Only)
+### Local simulation (runs on real, firmware-produced data)
+
+`docker compose up -d` runs the whole pipeline live: the **`simulator`** spawns the
+node **firmware host build** (`firmware/build/aq-node-sim`, the real C sampling +
+payload-encode code with simulated PMS7003/BME280 drivers) per node, wraps each
+payload in a ChirpStack uplink, and publishes to MQTT → ingestion decodes
+(`@aq/telemetry-codec`) → TimescaleDB + Redis → API (REST + Socket.IO) → dashboard.
+The dashboard reads the backend through `apps/dashboard/src/services` (HTTP + WS),
+or falls back to the in-browser mock when `VITE_API_URL` is unset.
+
+### Docker (local dev backing services)
+
+The root `docker-compose.yml` spins up the backing services; run the apps on the
+host (`pnpm dev`) for hot-reload. Uses profiles to keep the default lean.
 
 ```bash
-cd backend
-bunx biome check .              # Check all files
-bunx biome check --write .      # Fix all auto-fixable issues
-bunx biome format .             # Format only
-bunx biome lint .               # Lint only
+docker compose up -d                              # full stack: data plane + migrate (one-shot) + api/ingestion/dashboard + simulator
+docker compose --profile observability up -d      # + Grafana / Prometheus / Loki
+docker compose logs -f ingestion                  # watch readings being ingested
+docker compose up -d --scale simulator=0          # run without the traffic simulator
+docker compose down                               # Stop (add -v to wipe volumes + DB schema)
 ```
 
-### Docker (Full Stack)
+On `up`, the one-shot **`migrate`** service applies both DBs' migrations (incl. the
+custom TimescaleDB hypertable/continuous-aggregate/compression/retention SQL) and
+seeds the sensor fixtures, then api/ingestion start. The **`simulator`** emits
+realistic ChirpStack uplinks for the fixture nodes, so the pipeline runs on live
+data (simulator → NanoMQ → ingestion → TimescaleDB + Redis → API).
 
-```bash
-docker-compose up -d                      # Start all services
-docker-compose up -d chirpstack          # Start specific service
-docker-compose logs -f api               # View logs
-docker-compose down                      # Stop all services
-docker-compose -f docker-compose.test.yml up  # Run integration tests
-```
+Local Postgres (5432) is the relational stand-in for DO Managed Postgres;
+local TimescaleDB (5439) is the full-TSL stand-in for TigerData.
 
 ### Pre-commit Hooks (Lefthook)
 
-Git hooks are managed by [lefthook](https://github.com/evilmartians/lefthook) and installed automatically via `bun install` in the root directory.
+Git hooks are managed by [lefthook](https://github.com/evilmartians/lefthook) and installed automatically via `pnpm install` in the root directory.
 
 **Pre-commit hooks (run in parallel):**
-- `backend-lint`: Biome check with auto-fix on backend files
-- `backend-typecheck`: TypeScript type checking (`tsc --noEmit`)
-- `frontend-lint`: ESLint with auto-fix on frontend files (`.ts`, `.js`, `.vue`)
-- `frontend-format`: Prettier formatting on frontend files
-- `frontend-typecheck`: Vue TypeScript type checking (`vue-tsc --noEmit`)
+- `backend-lint`: Biome check with auto-fix on `apps/api`, `services/*`, `packages/*`
+- `dashboard-lint`: ESLint with auto-fix on `apps/dashboard` (`.ts`, `.js`, `.vue`)
+- `dashboard-format`: Prettier formatting on `apps/dashboard`
 - `secrets`: Scans for hardcoded credentials (disabled by default)
 
 **Commit-msg hook:**
@@ -196,14 +234,10 @@ lefthook install                   # Reinstall hooks
 
 ### CI (GitHub Actions)
 
-CI is configured in `.github/workflows/ci.yml` with path-based job filtering:
-
-| Job | Triggered By | Actions |
-|-----|--------------|---------|
-| `backend` | `backend/**` changes | Install deps, lint, typecheck, test, build |
-| `frontend` | `frontend/**` changes | Install deps, lint, format check, typecheck, test, build |
-
-Jobs only run when relevant files change (uses `dorny/paths-filter` action).
+CI is configured in `.github/workflows/ci.yml` as a single job that installs the
+workspace and runs Turbo across it: `pnpm install` → `pnpm lint` → `pnpm typecheck`
+→ `pnpm build`. Turbo runs each task in dependency order and caches unchanged
+packages, so only what actually changed is rebuilt.
 
 > **Note:** Docker build and integration tests will be added when deployment infrastructure is set up.
 
@@ -221,17 +255,31 @@ Jobs only run when relevant files change (uses `dorny/paths-filter` action).
 - Cost-effective at scale (200+ sensors)
 - Can operate offline if needed
 
-### Why TimescaleDB?
+### Why TimescaleDB (hosted on TigerData)?
 - 10-100x compression on time-series data
 - Continuous aggregates (auto-updating materialized views)
-- Real PostgreSQL with PostGIS for geospatial queries
+- Real PostgreSQL (relational + time-series in one engine)
 - Automatic retention policies for data cleanup
+- **Hosting:** these TSL features require **TigerData** (managed) or self-hosting —
+  DO Managed Postgres ships the **Apache-2.0 edition only**, where compression,
+  continuous aggregates, and retention error out. Hence the two-DB split (ADR-001).
 
-### Why EMQX Serverless?
-- Free tier supports project scale
-- Cloud-native and scalable
-- Better than self-hosted Mosquitto for reliability
-- Modern MQTT 5.0 support
+### Why two separate databases? (ADR-001)
+- DO Managed Postgres can't run the required Timescale TSL features → telemetry
+  must go to TigerData; relational data is happy (and cheaper, managed-HA) on DO.
+- Also isolates ingestion write-load from app reads, with independent scaling/backups.
+
+### Why EMQX (prod) / NanoMQ (local)?
+- **EMQX** in production: cloud-native, scalable, MQTT 5.0, free tier fits project scale.
+- **NanoMQ** for local dev: lightweight C/NNG broker, tiny footprint, same MQTT
+  contract (same EMQ ecosystem) so app code is identical across both.
+
+### Why Drizzle ORM? (ADR-001)
+- One tool for **both** databases (no mixing query libraries); best Node/Bun story.
+- Schema-in-TS + relational query API for app data; `--custom` SQL migrations cleanly
+  express Timescale DDL (hypertables, continuous aggregates, compression/retention).
+- TypeORM rejected (weak inference; its `@timescaledb/typeorm` helper is abandoned at v0.0.1);
+  Prisma rejected (weak Timescale fit); Kysely rejected (no schema/migrations of its own).
 
 ### Why MapLibre GL JS + OpenStreetMap (not Mapbox)?
 - MapLibre is open source fork of Mapbox GL v1 (before license change)
@@ -248,25 +296,26 @@ Jobs only run when relevant files change (uses `dorny/paths-filter` action).
 - Tree-shakeable (~100KB but only import what you need)
 - Maintained by Apache Foundation
 
-### Why Bun?
-- 7x faster than npm for package installation
-- All-in-one: runtime + package manager + bundler + test runner
-- Native TypeScript support without transpilation
-- Drop-in replacement for Node.js in most cases
+### Why pnpm + Node (not Bun)? (ADR-003)
+- **pnpm** to install: strict non-flat `node_modules` (phantom-dep protection),
+  catalogs to pin shared versions, best-in-class Docker layer caching, `turbo prune`.
+- **Node LTS** to run: our stack hits the Bun runtime's 2026 soft spots —
+  mqtt.js-over-TLS, ioredis, ORM-under-SWC, and long-uptime memory in the 24/7
+  ingestion service; NestJS has no official Bun support. The runtime speed edge is
+  irrelevant when the bottleneck is DB/Redis/MQTT I/O.
+- **Bun** stays optional as a fast test runner (`bun test`) on shared packages.
 
 ### Why Biome (Backend)?
-- 30x faster than ESLint + Prettier combined
-- Single tool for linting AND formatting
-- Built in Rust for performance
-- Type-aware linting since v2.0 (catches more bugs)
-- Works well for pure TypeScript (NestJS backend)
+- 30x faster than ESLint + Prettier combined; single tool for lint AND format
+- Built in Rust; type-aware linting since v2 (no `tsc` needed)
+- Works well for pure TypeScript (NestJS backend) — formats decorators fine
 
 ### Why ESLint + Prettier (Frontend)?
-- `eslint-plugin-vue` provides full Vue template analysis
-- Catches unused variables in `<script setup>` that are used in `<template>`
+- `eslint-plugin-vue` is the **only** tool with real `<script setup>`↔`<template>`
+  cross-analysis (catches a var used in template but undeclared in script)
 - Vue-specific rules (component naming, props/emits declarations)
-- Mature ecosystem with excellent Vue 3 + TypeScript support
-- Biome's Vue support is still developing (no cross-template analysis)
+- Mature Vue 3 + TypeScript ecosystem
+- As of 2026, Biome and oxlint still don't parse Vue templates → ESLint stays for the frontend
 
 ### Why Lefthook?
 - Written in Go, extremely fast startup (no Node.js overhead)
@@ -356,15 +405,15 @@ Closes #123
 4. **MQTT publish** to topic: `application/{app_id}/device/{dev_eui}/up`
 5. **NestJS ingestion service**:
    - Subscribes to MQTT via microservice transport
-   - Validates sensor data with class-validator
+   - Decodes the LoRa payload (`@aq/telemetry-codec`) and validates with Zod (`@aq/contracts`)
    - Calculates AQI (Air Quality Index)
-   - Writes to TimescaleDB via TypeORM (persistence)
+   - Writes readings to TigerData (TimescaleDB) via Drizzle (persistence)
    - Publishes to Redis Pub/Sub channel (real-time broadcast)
    - Updates Redis cache (latest values per sensor)
 6. **NestJS WebSocket gateway**:
    - Subscribes to Redis Pub/Sub channel
    - Broadcasts new readings to connected clients via Socket.IO
-7. **NestJS REST API** serves historical data from TimescaleDB, latest from Redis
+7. **NestJS REST API** serves historical readings from TigerData + metadata from DO Postgres, latest from Redis
 8. **Vue.js dashboard** receives real-time updates via WebSocket, fetches history via REST
 
 ### Data Format
@@ -426,11 +475,16 @@ Sensor readings JSON structure:
 - Vite Docs: https://vite.dev/guide/
 - Apache ECharts: https://echarts.apache.org/
 - Biome Docs: https://biomejs.dev/
-- Bun Docs: https://bun.sh/docs
+- pnpm Docs: https://pnpm.io/
+- Turborepo Docs: https://turborepo.dev/docs
+- Drizzle ORM Docs: https://orm.drizzle.team/
+- Zod Docs: https://zod.dev/
 
 **Infrastructure:**
 - ChirpStack Docs: https://www.chirpstack.io/docs/
+- TigerData (TimescaleDB) Docs: https://docs.tigerdata.com/
 - TimescaleDB Docs: https://docs.timescale.com/
+- OpenTofu Docs: https://opentofu.org/docs/
 - MapLibre GL JS: https://maplibre.org/maplibre-gl-js/docs/
 
 **LoRaWAN & Air Quality:**
@@ -463,4 +517,4 @@ This project follows a common sense code of conduct. Be respectful, collaborativ
 
 ---
 
-Last updated: December 13, 2025
+Last updated: June 27, 2026

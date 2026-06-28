@@ -1,26 +1,74 @@
-# Air Quality Monitoring - Docker Compose
-# Full stack deployment for development and production
+# =============================================================================
+# Air Quality Monitoring — Local Development Stack
+# =============================================================================
+#
+# Full local stack: the backing services (Postgres, TimescaleDB, Redis, NanoMQ,
+# ChirpStack) plus the app services (api, ingestion, dashboard) built from source
+# with hot reload. Prefer running an individual app on the HOST
+# (`pnpm --filter @aq/<name> start:dev|dev`) for the fastest inner loop.
+#
+# Usage:
+#   docker compose up -d                          # default: db, redis, mqtt, ChirpStack
+#   docker compose --profile observability up -d  # + Grafana / Prometheus / Loki
+#   docker compose down                           # stop (add -v to wipe volumes)
+#
+# Connection defaults (override via a root .env file):
+#   Postgres/Timescale : localhost:5439  (user/pass/db = airquality)
+#   Redis              : localhost:6379
+#   MQTT               : localhost:1883   (ws: 9001)
+#   ChirpStack UI      : http://localhost:8080
+#   Grafana            : http://localhost:3001  (admin/admin)
+#   Prometheus         : http://localhost:9090
+# =============================================================================
+
+name: airquality
 
 services:
-  # =============================================================================
-  # Database Services
-  # =============================================================================
+  # ===========================================================================
+  # Core data plane  (started by default — everything needs these)
+  # ===========================================================================
 
+  # Relational app database (normal PostgreSQL). Users, auth, API keys,
+  # sensor/device metadata, locations, dashboard config — and ChirpStack's own
+  # state. Kept SEPARATE from telemetry so ingestion write-load never contends
+  # with app reads. Schema is owned by migrations, not initdb (init only adds
+  # the pg_trgm extension ChirpStack needs).
+  postgres:
+    image: postgres:16-alpine
+    container_name: airquality-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${APP_DB_USERNAME:-airquality}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-airquality}
+      POSTGRES_DB: ${APP_DB_NAME:-airquality}
+    ports:
+      - "${APP_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USERNAME:-airquality} -d ${APP_DB_NAME:-airquality}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Telemetry database — a DEDICATED TimescaleDB instance for time-series sensor
+  # readings ONLY: hypertables, continuous aggregates, compression + retention.
+  # The timescaledb extension is auto-created in POSTGRES_DB by this image.
   timescaledb:
     image: timescale/timescaledb:latest-pg16
     container_name: airquality-timescaledb
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USERNAME:-airquality}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-airquality}
-      POSTGRES_DB: ${DB_NAME:-airquality}
+      POSTGRES_USER: ${TSDB_USERNAME:-airquality}
+      POSTGRES_PASSWORD: ${TSDB_PASSWORD:-airquality}
+      POSTGRES_DB: ${TSDB_NAME:-telemetry}
+    ports:
+      - "${TSDB_PORT:-5439}:5432"
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d
-    ports:
-      - "5439:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airquality"]
+      test: ["CMD-SHELL", "pg_isready -U ${TSDB_USERNAME:-airquality} -d ${TSDB_NAME:-telemetry}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,163 +78,253 @@ services:
     container_name: airquality-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # =============================================================================
-  # Message Broker (MQTT)
-  # =============================================================================
-
-  mosquitto:
-    image: eclipse-mosquitto:2
-    container_name: airquality-mosquitto
+  # MQTT broker. NanoMQ — a lightweight (C / NNG) MQTT 5.0 broker, tiny memory
+  # footprint and well suited to edge/IoT. Production uses EMQX (same EMQ
+  # ecosystem, identical MQTT contract), so app code is unaffected.
+  mqtt:
+    image: emqx/nanomq:latest
+    container_name: airquality-mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883"   # MQTT
-      - "9001:9001"   # MQTT WebSocket
+      - "1883:1883"   # MQTT (TCP)
+      - "8083:8083"   # MQTT over WebSocket
+      - "8081:8081"   # HTTP REST API
     volumes:
-      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
-    healthcheck:
-      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ./deploy/local/mqtt/nanomq.conf:/usr/local/nanomq/nanomq.conf:ro
 
-  # =============================================================================
-  # LoRaWAN Network Server
-  # =============================================================================
-
+  # ===========================================================================
+  # LoRaWAN network server
+  # ===========================================================================
   chirpstack:
     image: chirpstack/chirpstack:4
     container_name: airquality-chirpstack
     restart: unless-stopped
     command: -c /etc/chirpstack
+    # NOTE: gateway config moves to edge/chirpstack/ during the migration.
     volumes:
-      - ./gateway/chirpstack:/etc/chirpstack
+      - ./edge/chirpstack:/etc/chirpstack:ro
+    ports:
+      - "8080:8080"     # Web UI / gRPC-web API
+      - "1700:1700/udp" # Semtech UDP packet forwarder
+    # ChirpStack stores its own state in the RELATIONAL Postgres (it does not
+    # need TimescaleDB). Connection + Redis are configured in
+    # edge/chirpstack/chirpstack.toml (ChirpStack reads the toml, not env
+    # overrides); that DSN points at the `postgres` service. Requires pg_trgm
+    # (added via the postgres init script).
     depends_on:
-      timescaledb:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mosquitto:
-        condition: service_healthy
-    ports:
-      - "8080:8080"   # Web UI
-      - "1700:1700/udp" # Gateway UDP
-    environment:
-      POSTGRESQL__DSN: postgres://${DB_USERNAME:-airquality}:${DB_PASSWORD:-airquality}@timescaledb/${DB_NAME:-airquality}?sslmode=disable
-      REDIS__SERVERS: redis://redis:6379
+      mqtt:
+        condition: service_started
 
-  # =============================================================================
-  # Application Services
-  # =============================================================================
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: dev
-    container_name: airquality-backend
-    restart: unless-stopped
-    depends_on:
-      timescaledb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      mosquitto:
-        condition: service_healthy
-    ports:
-      - "3000:3000"
-      - "9229:9229"  # Debug port
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      PORT: 3000
-      DB_HOST: timescaledb
-      DB_PORT: 5432
-      DB_USERNAME: ${DB_USERNAME:-airquality}
-      DB_PASSWORD: ${DB_PASSWORD:-airquality}
-      DB_NAME: ${DB_NAME:-airquality}
-      REDIS_URL: redis://redis:6379
-      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
-      MQTT_USERNAME: ${MQTT_USERNAME:-}
-      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: dev
-    container_name: airquality-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000}
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-
-  # =============================================================================
-  # Monitoring Services
-  # =============================================================================
-
+  # ===========================================================================
+  # Observability (LGTM-lite)  (profile: observability)
+  # Full Tempo/Mimir/Alloy stack with its own configs lives in
+  # deploy/observability/ — this is a lean local subset.
+  # ===========================================================================
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11
     container_name: airquality-grafana
     restart: unless-stopped
+    profiles: ["observability"]
     ports:
       - "3001:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/provisioning:/etc/grafana/provisioning
+      - ./deploy/observability/provisioning:/etc/grafana/provisioning:ro
 
   prometheus:
     image: prom/prometheus:latest
     container_name: airquality-prometheus
     restart: unless-stopped
+    profiles: ["observability"]
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
 
-# =============================================================================
-# Volumes
-# =============================================================================
+  # Loki runs with its built-in default config (no mount required for local dev).
+  loki:
+    image: grafana/loki:3
+    container_name: airquality-loki
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+
+  # ===========================================================================
+  # Migrations — one-shot, runs to completion before the apps start.
+  # Discrete step (not app-on-startup): runs once, in one place across both DBs,
+  # and can hold DDL privileges the runtime apps don't. Idempotent.
+  # ===========================================================================
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: deps # has the full install (drizzle-kit) + built @aq/db (seed)
+    container_name: airquality-migrate
+    command: >
+      sh -c "pnpm --filter @aq/db migrate:relational &&
+             pnpm --filter @aq/db migrate:telemetry &&
+             pnpm --filter @aq/db db:seed"
+    environment:
+      APP_DB_URL: postgres://${APP_DB_USERNAME:-airquality}:${APP_DB_PASSWORD:-airquality}@postgres:5432/${APP_DB_NAME:-airquality}
+      TSDB_URL: postgres://${TSDB_USERNAME:-airquality}:${TSDB_PASSWORD:-airquality}@timescaledb:5432/${TSDB_NAME:-telemetry}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+  # ===========================================================================
+  # Application services  (dev target, hot reload)
+  # Build context is the REPO ROOT (single pnpm workspace lockfile). Source is
+  # bind-mounted for live reload; each app's node_modules is kept inside the
+  # container via an anonymous volume so host files never shadow the install.
+  # ===========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: dev
+    container_name: airquality-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9229:9229" # debugger
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${APP_DB_USERNAME:-airquality}
+      DB_PASSWORD: ${APP_DB_PASSWORD:-airquality}
+      DB_NAME: ${APP_DB_NAME:-airquality}
+      TSDB_HOST: timescaledb
+      TSDB_PORT: 5432
+      TSDB_USERNAME: ${TSDB_USERNAME:-airquality}
+      TSDB_PASSWORD: ${TSDB_PASSWORD:-airquality}
+      TSDB_NAME: ${TSDB_NAME:-telemetry}
+      REDIS_URL: redis://redis:6379
+      MQTT_URL: mqtt://mqtt:1883
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      CHOKIDAR_USEPOLLING: "true" # reliable file-watching across the bind mount
+    volumes:
+      - ./apps/api:/repo/apps/api
+      - /repo/apps/api/node_modules
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: services/ingestion/Dockerfile
+      target: dev
+    container_name: airquality-ingestion
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      TSDB_HOST: timescaledb
+      TSDB_PORT: 5432
+      TSDB_USERNAME: ${TSDB_USERNAME:-airquality}
+      TSDB_PASSWORD: ${TSDB_PASSWORD:-airquality}
+      TSDB_NAME: ${TSDB_NAME:-telemetry}
+      MQTT_URL: mqtt://mqtt:1883
+      REDIS_URL: redis://redis:6379
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./services/ingestion:/repo/services/ingestion
+      - /repo/services/ingestion/node_modules
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      target: dev
+    container_name: airquality-dashboard
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000}
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./apps/dashboard:/repo/apps/dashboard
+      - /repo/apps/dashboard/node_modules
+    depends_on:
+      - api
+
+  # ===========================================================================
+  # Simulated LoRaWAN deployment — emits realistic ChirpStack uplinks for the
+  # fixture nodes (multi-gateway rxInfo, diurnal patterns, battery drain) so the
+  # whole pipeline runs on live data. Disable with: docker compose up --scale simulator=0
+  # ===========================================================================
+  simulator:
+    build:
+      context: .
+      dockerfile: services/simulator/Dockerfile
+      target: dev
+    container_name: airquality-simulator
+    restart: unless-stopped
+    environment:
+      MQTT_URL: mqtt://mqtt:1883
+      SIM_INTERVAL_MS: "15000"
+    depends_on:
+      mqtt:
+        condition: service_started
+      ingestion:
+        condition: service_started
 
 volumes:
+  postgres_data:
   timescaledb_data:
   redis_data:
-  mosquitto_data:
-  mosquitto_log:
   grafana_data:
   prometheus_data:
-
-# =============================================================================
-# Networks
-# =============================================================================
+  loki_data:
 
 networks:
   default:

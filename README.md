@@ -20,7 +20,7 @@ Open-source distributed air quality monitoring system using solar-powered LoRaWA
 
 | Firmware | Network | Backend | Database | Frontend | Tooling |
 |----------|---------|---------|----------|----------|---------|
-| ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white) | ![LoRaWAN](https://img.shields.io/badge/LoRaWAN-00A9CE?style=for-the-badge&logo=lora&logoColor=white) | ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white) | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white) | ![Vue.js](https://img.shields.io/badge/Vue.js-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white) | ![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white) |
+| ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white) | ![LoRaWAN](https://img.shields.io/badge/LoRaWAN-00A9CE?style=for-the-badge&logo=lora&logoColor=white) | ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white) | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white) | ![Vue.js](https://img.shields.io/badge/Vue.js-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white) | ![pnpm](https://img.shields.io/badge/pnpm-F69220?style=for-the-badge&logo=pnpm&logoColor=white) |
 | ![ESP-IDF](https://img.shields.io/badge/ESP--IDF-E7352C?style=for-the-badge&logo=espressif&logoColor=white) | ![EMQX](https://img.shields.io/badge/EMQX-00B173?style=for-the-badge&logo=emqx&logoColor=white) | ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) | ![TimescaleDB](https://img.shields.io/badge/TimescaleDB-FDB515?style=for-the-badge&logo=timescale&logoColor=black) | ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white) | ![Biome](https://img.shields.io/badge/Biome-60A5FA?style=for-the-badge&logo=biome&logoColor=white) |
 | ![PlatformIO](https://img.shields.io/badge/PlatformIO-F5822A?style=for-the-badge&logo=platformio&logoColor=white) | ![ChirpStack](https://img.shields.io/badge/ChirpStack-00A8E1?style=for-the-badge&logo=chirpstack&logoColor=white) | | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white) | ![MapLibre](https://img.shields.io/badge/MapLibre-396CB2?style=for-the-badge&logo=maplibre&logoColor=white) | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white) |
 
@@ -139,15 +139,17 @@ Lebanon faces severe air quality challenges from:
 | Component | Technology | Version | Why |
 |-----------|-----------|---------|-----|
 | **Runtime** | Node.js | 24+ LTS | Long-term support, stable for production |
-| **Package Manager** | Bun | 1.x | 7x faster than npm, all-in-one JS runtime |
-| **Backend Linting** | Biome | 2.0+ | 30x faster than ESLint+Prettier, type-aware |
+| **Package Manager** | pnpm | 11+ | Strict node_modules, catalogs, fast Docker caching |
+| **Monorepo** | Turborepo | - | Task graph + caching, affected-graph CI |
+| **Backend Linting** | Biome | 2.5+ | 30x faster than ESLint+Prettier, type-aware |
 | **Frontend Linting** | ESLint + Prettier | 9+ | Full Vue template support with eslint-plugin-vue |
 | **Firmware** | C++ + ESP-IDF | 5.x | Battery efficiency, ULP coprocessor support, proven at scale |
 | **Network Server** | ChirpStack | 4.x | Open source LoRaWAN, works offline |
-| **Message Broker** | EMQX Serverless | - | Free tier, scalable, cloud-native MQTT |
+| **Message Broker** | EMQX (prod) / NanoMQ (local) | - | Scalable cloud MQTT; lightweight local broker |
 | **Backend** | NestJS | 11+ | Type-safe, modular architecture, great DX |
 | **Language** | TypeScript | 5.9+ | Type safety, excellent tooling |
-| **Database** | TimescaleDB | 2.x | 100x compression, perfect for time-series |
+| **Telemetry DB** | TimescaleDB on TigerData | 2.x | 100x compression, continuous aggregates, retention |
+| **Relational DB** | DO Managed PostgreSQL | 16 | App metadata + ChirpStack state |
 | **Cache** | Redis | 7.x | Sub-millisecond reads |
 | **Frontend** | Vue.js | 3.5+ | Lightweight, reactive, intuitive API |
 | **Build Tool** | Vite | 7+ | Fast HMR, optimized builds |
@@ -158,50 +160,29 @@ Lebanon faces severe air quality challenges from:
 
 ## Project Structure
 
+pnpm + Turborepo monorepo (see [`docs/architecture.md`](docs/architecture.md) for the full rationale):
+
 ```
 air-quality-monitoring/
-├── firmware/              # ESP32 sensor firmware (C++)
-│   ├── src/
-│   │   ├── main.cpp
-│   │   ├── sensors/      # PMS7003, BME280 drivers
-│   │   ├── lora/         # LoRaWAN communication
-│   │   └── power/        # Deep sleep management
-│   └── platformio.ini
-│
-├── backend/              # NestJS services (TypeScript)
-│   ├── src/
-│   │   ├── ingestion/   # MQTT → Database pipeline
-│   │   ├── api/         # REST API modules
-│   │   ├── database/    # TypeORM entities, migrations
-│   │   └── common/      # Shared utilities, DTOs
-│   └── package.json
-│
-├── frontend/            # Vue.js web dashboard
-│   ├── src/
-│   │   ├── components/  # Map, Charts, Widgets
-│   │   ├── views/       # Home, Sensor Detail, About
-│   │   └── i18n/        # Arabic + English translations
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── gateway/             # LoRaWAN gateway setup
-│   └── chirpstack/      # ChirpStack configuration
-│
-├── hardware/            # Physical designs
-│   ├── bom/            # Bill of materials
-│   ├── schematics/     # Wiring diagrams
-│   └── enclosure/      # 3D models, assembly guide
-│
-├── monitoring/          # Grafana dashboards
-│
-├── docs/               # Documentation
-│   ├── getting-started/
-│   ├── deployment/
-│   └── api/
-│
-├── docker-compose.yml  # Full stack deployment
-├── .env.example        # Environment variables template
-└── README.md          # You are here!
+├── apps/
+│   ├── dashboard/        # Vue 3 + Vite SPA            (@aq/dashboard)
+│   └── api/              # NestJS public REST + WS      (@aq/api)
+├── services/
+│   └── ingestion/        # NestJS MQTT pipeline         (@aq/ingestion)
+├── packages/             # shared TypeScript libraries
+│   ├── domain/           # @aq/domain — AQI calc, types
+│   ├── contracts/        # @aq/contracts — Zod schemas
+│   ├── db/               # @aq/db — Drizzle (relational + telemetry)
+│   ├── telemetry-codec/  # @aq/telemetry-codec — LoRa payload codec
+│   └── observability/    # @aq/observability — logger / OTel
+├── firmware/             # ESP32 sensor firmware (C++, PlatformIO)
+├── edge/chirpstack/      # ChirpStack (LoRaWAN) configuration
+├── infra/                # OpenTofu (DigitalOcean)
+├── deploy/               # observability stack + on-prem provisioning
+├── database/ · mqtt/     # local Postgres init · NanoMQ config
+├── hardware/ · docs/     # BOMs / documentation
+├── turbo.json · pnpm-workspace.yaml · tsconfig.base.json · biome.json
+└── docker-compose.yml    # local full stack
 ```
 
 ---
@@ -219,8 +200,8 @@ air-quality-monitoring/
 **Software:**
 - [PlatformIO](https://platformio.org/) (for firmware)
 - [Docker](https://www.docker.com/) (for services)
-- [Bun](https://bun.sh/) (package manager & runtime, 7x faster than npm)
-- [Node.js 24+](https://nodejs.org/) (LTS - fallback runtime)
+- [Node.js 24+](https://nodejs.org/) (LTS runtime)
+- [pnpm 11+](https://pnpm.io/) (package manager — `corepack enable` activates it from the repo's `packageManager` field)
 
 ### Quick Start (Development)
 
@@ -237,45 +218,43 @@ cp .env.example .env
 nano .env
 ```
 
-**3. Start the backend services:**
+**3. Install dependencies (pnpm workspace, from the repo root):**
 ```bash
-docker-compose up -d
+corepack enable     # activates the pnpm version pinned in package.json
+pnpm install        # installs all workspaces (backend, frontend)
+```
+
+**4. Start the backing services:**
+```bash
+docker compose up -d                          # default stack
+docker compose --profile observability up -d  # + Grafana / Prometheus / Loki
 ```
 
 This starts:
-- ChirpStack (LoRaWAN server) → http://localhost:8080
-- TimescaleDB (database) → localhost:5432
+- Relational Postgres → localhost:5432
+- TimescaleDB (telemetry) → localhost:5439
 - Redis (cache) → localhost:6379
-- EMQX Serverless (MQTT broker) → Cloud-based
+- NanoMQ (MQTT broker) → localhost:1883
+- ChirpStack (LoRaWAN server) → http://localhost:8080
 
-**4. Run the API:**
+**5. Run the apps (host, hot reload):**
 ```bash
-cd backend
-bun install
-bun run start:dev
+pnpm --filter @aq/api start:dev          # API           → http://localhost:3000
+pnpm --filter @aq/ingestion start:dev    # ingestion     → http://localhost:3001
+pnpm --filter @aq/dashboard dev          # dashboard     → http://localhost:5173
 ```
 
-API now available at http://localhost:3000
-- Docs: http://localhost:3000/api (Swagger)
+…or run the full stack in Docker: `docker compose up -d` (builds api, ingestion, dashboard).
 
-**5. Run the frontend:**
+**6. Build / lint the whole workspace:**
 ```bash
-cd frontend
-bun install
-bun run dev
-```
-
-Dashboard now available at http://localhost:5173
-
-**6. Lint and format code:**
-```bash
-bunx biome check --write .    # Fix all issues
-bunx biome check .            # Check only
+pnpm build      # turbo: build all packages + apps
+pnpm lint       # Biome (backend) + ESLint (dashboard)
 ```
 
 ### Pre-commit Hooks
 
-This project uses [lefthook](https://github.com/evilmartians/lefthook) for git hooks. Hooks are installed automatically when you run `bun install` in the root directory.
+This project uses [lefthook](https://github.com/evilmartians/lefthook) for git hooks. Hooks are installed automatically when you run `pnpm install` in the root directory.
 
 **Pre-commit checks (run in parallel):**
 - **Backend:** Biome lint/format (auto-fix) + TypeScript type checking
@@ -304,14 +283,10 @@ lefthook run pre-commit --all # Run on all files
 
 ### Continuous Integration
 
-GitHub Actions CI runs automatically on pull requests and pushes. Jobs are triggered based on changed paths:
-
-| Job | Trigger Paths | Checks |
-|-----|---------------|--------|
-| **Backend** | `backend/**` | Lint, type check, tests, build |
-| **Frontend** | `frontend/**` | Lint, format, type check, tests, build |
-
-CI uses Bun for faster dependency installation and test execution.
+GitHub Actions CI runs automatically on pull requests and pushes: a single job
+installs the workspace with pnpm and runs Turbo across it — `pnpm lint`,
+`pnpm typecheck`, `pnpm build` — building each package/app in dependency order
+and caching what hasn't changed.
 
 **7. Flash firmware to ESP32:**
 ```bash
@@ -322,12 +297,9 @@ pio device monitor  # View serial output
 
 ### Full Documentation
 
-See `docs/getting-started/` for detailed guides on:
-- Hardware assembly
-- Sensor calibration
-- Gateway setup
-- Cloud deployment
-- API usage
+See [`docs/architecture.md`](docs/architecture.md) for the system design and decisions.
+Detailed guides (hardware assembly, calibration, gateway setup, deployment, API usage)
+will be added under `docs/` as the platform matures.
 
 ---
 
@@ -527,22 +499,15 @@ We chose AGPL to ensure this project **remains open source forever**. We built t
 
 ## Documentation
 
-### User Guides
-- [Getting Started](docs/getting-started/) - Set up your development environment
-- [Hardware Assembly](docs/hardware/) - Build a sensor node
-- [API Reference](docs/api/) - Use the public API
-- [Deployment Guide](docs/deployment/) - Deploy to production
+- [Architecture & Decisions](docs/architecture.md) — system design + ADRs (the canonical reference)
+- [Contributing](CONTRIBUTING.md) — dev setup, coding standards, workflow
+- [Frontend Production Readiness](docs/frontend-production-readiness.md) — dashboard hardening backlog
+- [ChirpStack / Gateway setup](edge/chirpstack/README.md) — LoRaWAN network server
+- [Infrastructure](infra/README.md) · [Deployment](deploy/README.md) — provisioning + runtime composition
+- [Hardware BOM](hardware/bom/) — bill of materials
 
-### Developer Guides
-- [Architecture Overview](docs/architecture/) - System design
-- [Firmware Development](docs/firmware/) - ESP32 programming
-- [Backend Development](docs/backend/) - NestJS services
-- [Frontend Development](docs/frontend/) - Vue.js dashboard
-
-### Operations
-- [Maintenance Guide](docs/operations/) - Keep sensors running
-- [Troubleshooting](docs/troubleshooting/) - Common issues
-- [Calibration](docs/calibration/) - Sensor accuracy
+> User guides (getting started, hardware assembly, calibration, operations) will be
+> added under `docs/` as the platform matures.
 
 ---
 
@@ -563,7 +528,7 @@ Built with excellent open source software:
 - [NestJS](https://nestjs.com/) - Progressive Node.js framework
 - [Vue.js](https://vuejs.org/) - Progressive JavaScript framework
 - [MapLibre GL JS](https://maplibre.org/) - Open source maps
-- [Bun](https://bun.sh/) - Fast JavaScript runtime & package manager
+- [pnpm](https://pnpm.io/) - Fast, disk-efficient package manager
 - [Biome](https://biomejs.dev/) - Fast linter and formatter
 
 ### Community

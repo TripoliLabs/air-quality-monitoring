@@ -4,75 +4,43 @@
 pre-commit:
   parallel: true
   commands:
-    # Backend checks - auto-fix and re-stage
+    # Backend / packages — Biome (apps/api, services/*, packages/*)
     backend-lint:
-      root: "backend/"
-      glob: "**/*.{ts,js}"
-      run: bun x biome check --write --unsafe {staged_files} && git add {staged_files}
+      glob: "{apps/api,services,packages}/**/*.{ts,js}"
+      run: pnpm exec biome check --write {staged_files} && git add {staged_files}
       stage_fixed: true
 
-    backend-typecheck:
-      root: "backend/"
-      glob: "**/*.ts"
-      run: bun run tsc --noEmit
-
-    # Frontend checks - ESLint + Prettier with auto-fix
-    frontend-lint:
-      root: "frontend/"
+    # Dashboard — ESLint + Prettier
+    dashboard-lint:
+      root: "apps/dashboard/"
       glob: "**/*.{ts,js,vue}"
-      run: bun run eslint --fix {staged_files} && git add {staged_files}
+      run: pnpm exec eslint --fix {staged_files} && git add {staged_files}
       stage_fixed: true
 
-    frontend-format:
-      root: "frontend/"
+    dashboard-format:
+      root: "apps/dashboard/"
       glob: "**/*.{ts,js,vue,css,json,html}"
-      run: bun run prettier --write {staged_files} && git add {staged_files}
+      run: pnpm exec prettier --write {staged_files} && git add {staged_files}
       stage_fixed: true
 
-    frontend-typecheck:
-      root: "frontend/"
-      glob: "**/*.{ts,vue}"
-      run: bun run vue-tsc --noEmit
-
-    # Docker/Config validation
-    docker-lint:
-      glob: "**/Dockerfile"
-      run: docker run --rm -i hadolint/hadolint < {staged_files}
-      skip: true  # Enable when hadolint is needed
-
-    # Secrets detection
+    # Secrets detection (enable when ready)
     secrets:
       run: |
         if git diff --cached --name-only | xargs grep -l -E "(password|secret|api_key|apikey|token).*=.*['\"][^'\"]+['\"]" 2>/dev/null; then
           echo "Potential secrets detected in staged files!"
           exit 1
         fi
-      skip: true  # Enable when ready
+      skip: true
 
 commit-msg:
   commands:
-    # Conventional commits format
     conventional:
       run: |
         MSG=$(cat {1})
-        if ! echo "$MSG" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|ci|build|perf)(\(.+\))?: .+"; then
+        if ! echo "$MSG" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|ci|build|perf)(\(.+\))?!?: .+"; then
           echo "Commit message must follow conventional commits format:"
           echo "  <type>(<scope>): <description>"
           echo ""
           echo "Types: feat, fix, docs, style, refactor, test, chore, ci, build, perf"
-          echo ""
-          echo "Example: feat(backend): add user authentication"
           exit 1
         fi
-
-# pre-push:
-#   parallel: true
-#   commands:
-#     # Run tests before push
-#     backend-test:
-#       glob: "backend/**/*.ts"
-#       run: cd backend && bun run test --passWithNoTests
-#
-#     frontend-test:
-#       glob: "frontend/**/*.{ts,vue}"
-#       run: cd frontend && bun run test --passWithNoTests

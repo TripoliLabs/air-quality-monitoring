@@ -1,0 +1,36 @@
+# Build context = repo root. Keep it lean and never copy host node_modules.
+
+# Dependencies (installed inside the image)
+**/node_modules
+
+# Build artifacts
+**/dist
+**/coverage
+**/.vite
+**/*.tsbuildinfo
+
+# VCS / CI / editors
+.git
+.github
+.idea
+.vscode
+
+# Env files (provided via compose env / build args, never baked in)
+**/.env
+**/.env.*
+
+# Logs / OS cruft
+**/*.log
+**/.DS_Store
+
+# Docker & compose (not needed inside the images)
+**/Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Not needed in any image (firmware source IS needed — the simulator builds it)
+hardware/
+docs/
+
+# firmware host build artifacts (rebuilt inside the image)
+firmware/build/

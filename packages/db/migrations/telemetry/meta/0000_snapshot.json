@@ -1,0 +1,106 @@
+{
+  "id": "6e130241-d001-4051-afa9-f4b46c7f342c",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.readings": {
+      "name": "readings",
+      "schema": "",
+      "columns": {
+        "time": {
+          "name": "time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sensor_id": {
+          "name": "sensor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pm25": {
+          "name": "pm25",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pm10": {
+          "name": "pm10",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "temperature": {
+          "name": "temperature",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "humidity": {
+          "name": "humidity",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pressure": {
+          "name": "pressure",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "aqi": {
+          "name": "aqi",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aqi_category": {
+          "name": "aqi_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "battery_mv": {
+          "name": "battery_mv",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "signal_strength": {
+          "name": "signal_strength",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "readings_sensor_id_time_pk": {
+          "name": "readings_sensor_id_time_pk",
+          "columns": [
+            "sensor_id",
+            "time"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

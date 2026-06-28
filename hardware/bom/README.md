@@ -29,4 +29,4 @@ This directory contains the bill of materials for air quality sensor nodes.
 
 ## Supplier Links
 
-See `docs/air-quality-node-bom.pdf` for detailed supplier links.
+See [`air-quality-node-bom.pdf`](air-quality-node-bom.pdf) for detailed supplier links.

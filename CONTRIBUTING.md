@@ -13,10 +13,13 @@ This document provides guidelines for contributing to this project. Following th
   - [Contributing Code](#contributing-code)
   - [Improving Documentation](#improving-documentation)
   - [Hardware Contributions](#hardware-contributions)
+- [Project Layout](#project-layout)
 - [Development Setup](#development-setup)
 - [Coding Standards](#coding-standards)
 - [Git Workflow](#git-workflow)
 - [Pull Request Process](#pull-request-process)
+- [Testing](#testing)
+- [Translation](#translation)
 - [Community](#community)
 
 ---
@@ -43,8 +46,8 @@ When creating a bug report, please include:
 - **Environment details**:
   - OS and version
   - Hardware (ESP32 board model, sensor versions)
-  - Software versions (firmware, backend, frontend)
-  - Browser (for frontend issues)
+  - Software versions (firmware, api/ingestion, dashboard)
+  - Browser (for dashboard issues)
 
 Use the [Bug Report template](.github/ISSUE_TEMPLATE/bug_report.md) when creating an issue.
 
@@ -99,164 +102,137 @@ Hardware contributions can include:
 
 ---
 
+## Project Layout
+
+This is a **pnpm + Turborepo monorepo**. See [`docs/architecture.md`](docs/architecture.md) for the full design and the architecture decision records.
+
+```
+apps/dashboard      @aq/dashboard   — Vue 3 + Vite SPA
+apps/api            @aq/api         — NestJS public REST + WebSocket API
+services/ingestion  @aq/ingestion   — NestJS MQTT → decode → validate → AQI → DB pipeline
+packages/*          @aq/{domain,contracts,db,telemetry-codec,observability}  — shared libraries
+firmware/           ESP32 firmware (C++ / PlatformIO + ESP-IDF)
+edge/ · infra/ · deploy/   — gateway config, OpenTofu, runtime composition
+```
+
+---
+
 ## Development Setup
 
 ### Prerequisites
 
-**For Firmware Development:**
-```bash
-# Install PlatformIO
-pip install platformio
+- **Node.js 24+** (LTS) and **pnpm 11+** — run `corepack enable` to activate the version pinned in `package.json`
+- **Docker** + Docker Compose (for the local backing stack)
+- **PlatformIO** (firmware only): `pip install platformio`
 
-# Clone the repository
+### Install (from the repo root)
+
+```bash
 git clone https://github.com/TripoliLabs/air-quality-monitoring.git
-cd air-quality-monitoring/firmware
-
-# Build the project
-pio run
+cd air-quality-monitoring
+corepack enable
+pnpm install          # installs the entire workspace
+cp .env .env.local    # adjust local config if needed (defaults work out of the box)
 ```
 
-**For Backend Development:**
+### Run the stack
+
 ```bash
-# Navigate to backend
-cd backend/api
+# Full local stack in Docker (Postgres, TimescaleDB, Redis, NanoMQ, ChirpStack, api, ingestion, dashboard):
+docker compose up -d
+docker compose --profile observability up -d   # + Grafana / Prometheus / Loki
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt  # Development dependencies
-
-# Run tests
-pytest
-
-# Start development server
-uvicorn main:app --reload
+# …or run the backing services in Docker and an app on the host for the fastest loop:
+pnpm --filter @aq/api start:dev          # API        → http://localhost:3000
+pnpm --filter @aq/ingestion start:dev    # ingestion  → http://localhost:3001
+pnpm --filter @aq/dashboard dev          # dashboard  → http://localhost:5173
 ```
 
-**For Frontend Development:**
+### Build, lint, typecheck (whole workspace, via Turbo)
+
 ```bash
-# Navigate to frontend
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-
-# Run linter
-npm run lint
-
-# Run tests
-npm test
+pnpm build        # build all packages + apps in dependency order
+pnpm lint         # Biome (backend/packages) + ESLint (dashboard)
+pnpm typecheck    # tsc / vue-tsc across the workspace
 ```
 
-### Environment Variables
+Shared `packages/*` compile to `dist/`; build them before running an app on the host (`pnpm build`, or let Turbo handle it).
 
-Copy `.env.example` to `.env` and configure:
+### Firmware
 
 ```bash
-cp .env.example .env
-# Edit .env with your local configuration
+cd firmware
+pio run                    # build
+pio run --target upload    # flash to ESP32
+pio device monitor         # serial output
 ```
 
 ---
 
 ## Coding Standards
 
-### Python (Backend)
+### TypeScript — backend & packages (`apps/api`, `services/ingestion`, `packages/*`)
 
-- Follow [PEP 8](https://pep8.org/)
-- Use type hints for function parameters and return values
+- Linted and formatted with **[Biome](https://biomejs.dev/)** (`pnpm --filter @aq/<name> exec biome check --write src`)
+- Strict TypeScript (`strict: true`); use explicit return types on exported functions
+- Prefer `const` over `let`; never use `var`
 - Maximum line length: 100 characters
-- Use docstrings for all public functions/classes
-- Format code with `black`:
-  ```bash
-  black backend/
-  ```
-- Lint with `ruff`:
-  ```bash
-  ruff check backend/
-  ```
+- Shared logic belongs in a `packages/*` library, not duplicated across apps
 
-**Example:**
-```python
-from typing import List, Optional
-
-def calculate_aqi(pm25: float, pm10: float) -> int:
-    """
-    Calculate Air Quality Index from PM2.5 and PM10 measurements.
-
-    Args:
-        pm25: PM2.5 concentration in µg/m³
-        pm10: PM10 concentration in µg/m³
-
-    Returns:
-        Air Quality Index value (0-500)
-    """
-    # Implementation here
-    pass
-```
-
-### JavaScript/TypeScript (Frontend)
-
-- Use ESLint configuration provided
-- Format with Prettier
-- Use functional components with hooks
-- Prefer `const` over `let`, avoid `var`
-- Use meaningful variable names
-
-**Example:**
 ```typescript
-interface SensorReading {
-  deviceId: string;
-  pm25: number;
-  pm10: number;
-  timestamp: Date;
-}
+import { z } from 'zod';
 
-const fetchSensorData = async (deviceId: string): Promise<SensorReading> => {
-  const response = await fetch(`/api/sensors/${deviceId}/latest`);
-  return response.json();
-};
+export const SensorReadingSchema = z.object({
+  deviceId: z.string().min(1),
+  pm25: z.number().min(0).max(1000),
+  pm10: z.number().min(0).max(1000),
+  timestamp: z.iso.datetime(),
+});
+
+export type SensorReading = z.infer<typeof SensorReadingSchema>;
 ```
 
-### C++ (Firmware)
+### Vue + TypeScript — dashboard (`apps/dashboard`)
 
-- Follow [Arduino style guide](https://www.arduino.cc/en/Reference/StyleGuide)
-- Use meaningful variable and function names
-- Comment complex logic
-- Keep functions short and focused
-- Use `const` for constants
+- Linted with **ESLint + eslint-plugin-vue**, formatted with **Prettier** (`pnpm --filter @aq/dashboard lint` / `format`)
+- Use the **Composition API** with `<script setup>` (this is Vue, not React)
+- Prefer `const` over `let`; strict TypeScript
+- Keep components focused; put reusable logic in composables (`src/composables/`)
 
-**Example:**
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+
+const props = defineProps<{ aqi: number }>();
+const category = computed(() => (props.aqi <= 50 ? 'good' : 'moderate'));
+</script>
+
+<template>
+  <span :class="category">{{ aqi }}</span>
+</template>
+```
+
+### C++ — firmware (`firmware/`)
+
+- Follow the [ESP-IDF style guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/contribute/style-guide.html)
+- Use `constexpr` for compile-time constants
+- Comment complex logic; keep functions small and focused
+- The LoRa payload byte layout is defined once in `packages/telemetry-codec` — keep firmware and that codec in sync
+
 ```cpp
-const int PM_SENSOR_RX = 16;
-const int PM_SENSOR_TX = 17;
+constexpr int PM_SENSOR_RX = 16;
+constexpr int PM_SENSOR_TX = 17;
 
-/**
- * Read PM2.5 and PM10 values from PMS5003 sensor
- *
- * @param pm25 Output parameter for PM2.5 reading
- * @param pm10 Output parameter for PM10 reading
- * @return true if reading successful, false otherwise
- */
-bool readPMSensor(float& pm25, float& pm10) {
-    // Implementation here
-}
+/** Read PM2.5 and PM10 from the PMS7003 sensor. Returns ESP_OK on success. */
+esp_err_t read_pm_sensor(float *pm25, float *pm10);
 ```
 
 ### General Guidelines
 
-- Write self-documenting code
-- Add comments for complex logic
+- Write self-documenting code; comment the *why*, not the *what*
 - Keep functions small and focused
-- Use descriptive names for variables and functions
-- Write unit tests for new functionality
-- Update documentation with code changes
+- Write tests for new functionality
+- Update documentation alongside code changes
 
 ---
 
@@ -277,66 +253,26 @@ Use descriptive branch names with prefixes:
 feature/add-wind-sensor-support
 fix/battery-voltage-reading
 docs/update-api-examples
-refactor/simplify-aqi-calculation
-test/add-sensor-validation-tests
 ```
 
 ### Commit Messages
 
-Write clear, descriptive commit messages:
+This project enforces [Conventional Commits](https://www.conventionalcommits.org/) (checked by a Lefthook `commit-msg` hook):
 
 ```
-<type>: <subject>
-
-<body>
-
-<footer>
+<type>(<scope>): <subject>
 ```
 
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Formatting, missing semicolons, etc.
-- `refactor`: Code restructuring
-- `test`: Adding tests
-- `chore`: Maintenance tasks
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`, `build`, `perf`
 
 **Examples:**
 ```
-feat: Add BME680 gas sensor support
-
-Implemented driver for BME680 to measure VOC levels.
-Updated data model to include gas resistance readings.
-
-Closes #123
+feat(ingestion): decode PMS7003 payload and compute AQI
+fix(api): correct sensor metadata serialization
+docs(readme): update monorepo dev commands
 ```
 
-```
-fix: Correct deep sleep timing calculation
-
-Fixed integer overflow in sleep duration calculation
-that caused sensors to wake up too early.
-
-Fixes #456
-```
-
-### Committing Code
-
-1. Stage your changes:
-   ```bash
-   git add <files>
-   ```
-
-2. Commit with a descriptive message:
-   ```bash
-   git commit -m "feat: Add support for wind sensors"
-   ```
-
-3. Push to your fork:
-   ```bash
-   git push origin feature/add-wind-sensors
-   ```
+Git hooks (lint, format, commit-msg) are installed automatically on `pnpm install` via [Lefthook](https://github.com/evilmartians/lefthook).
 
 ---
 
@@ -344,22 +280,19 @@ Fixes #456
 
 ### Before Submitting
 
-- [ ] Code follows the style guidelines
+- [ ] Code follows the style guidelines (`pnpm lint` passes)
+- [ ] `pnpm typecheck` and `pnpm build` pass
 - [ ] Self-review of code completed
-- [ ] Comments added for complex sections
-- [ ] Documentation updated (if applicable)
-- [ ] No new warnings generated
 - [ ] Tests added/updated and passing
-- [ ] Branch is up to date with `main`
+- [ ] Documentation updated (if applicable)
+- [ ] Branch is up to date with `staging`
 
 ### Submitting a Pull Request
 
-1. **Create PR** from your fork to `main` branch
+1. **Create PR** from your fork to the `staging` branch
 2. **Fill out the template** completely
 3. **Link related issues** using keywords (Fixes #123, Closes #456)
-4. **Request review** from maintainers
-5. **Respond to feedback** promptly
-6. **Keep PR updated** with `main` branch
+4. **Request review** from maintainers and **respond to feedback** promptly
 
 ### PR Title Format
 
@@ -368,90 +301,33 @@ Fixes #456
 ```
 
 **Examples:**
-- `feat(firmware): Add support for SDS011 PM sensor`
-- `fix(backend): Correct AQI calculation for PM10`
-- `docs(readme): Update installation instructions`
+- `feat(firmware): add support for SDS011 PM sensor`
+- `fix(api): correct AQI calculation for PM10`
+- `docs(readme): update installation instructions`
 
 ### Review Process
 
 - At least one maintainer approval required
-- All automated checks must pass
-- Discussions should be resolved
-- Maintainers may request changes
-
-### After Merge
-
-- Delete your feature branch
-- Close related issues (if not auto-closed)
-- Celebrate your contribution!
+- All automated CI checks must pass
+- Discussions should be resolved before merge
 
 ---
 
 ## Testing
 
-### Firmware Tests
-
 ```bash
-cd firmware
-pio test
+# Whole workspace (via Turbo)
+pnpm test
+
+# A single app/package
+pnpm --filter @aq/dashboard test     # Vitest
+pnpm --filter @aq/api test           # (add tests under apps/api)
+
+# Firmware
+cd firmware && pio test
 ```
 
-### Backend Tests
-
-```bash
-cd backend/api
-pytest
-pytest --cov  # With coverage report
-```
-
-### Frontend Tests
-
-```bash
-cd frontend
-npm test
-npm run test:coverage
-```
-
-### Integration Tests
-
-```bash
-# From project root
-docker-compose -f docker-compose.test.yml up
-```
-
----
-
-## Documentation
-
-When adding new features, please update:
-
-- Code comments
-- README.md (if applicable)
-- API documentation (`docs/api/`)
-- User guides (`docs/getting-started/`)
-- Inline documentation
-
----
-
-## Hardware Testing
-
-If you're testing hardware:
-
-1. **Document your setup**:
-   - Component models and versions
-   - Wiring diagram
-   - Configuration settings
-
-2. **Record results**:
-   - Sensor readings
-   - Power consumption
-   - Signal strength
-   - Any issues encountered
-
-3. **Share findings**:
-   - Create an issue with [Hardware] tag
-   - Include photos/diagrams
-   - Suggest improvements
+> Integration tests (a composed multi-service test run) will be added with the deployment infrastructure.
 
 ---
 
@@ -459,19 +335,17 @@ If you're testing hardware:
 
 Help us make this project accessible to Arabic speakers!
 
-### Translating Documentation
-
-1. Create a new file: `docs/<section>/README.ar.md`
-2. Translate the content
-3. Maintain formatting and structure
-4. Submit a PR
-
 ### Translating the Dashboard
 
-1. Add translations to `frontend/src/i18n/ar.json`
-2. Follow existing structure
-3. Test in Arabic mode
-4. Submit a PR
+1. Update the translations in `apps/dashboard/src/i18n/ar.ts` (mirror the keys in `en.ts`)
+2. Test in Arabic mode (the app sets `document.dir = 'rtl'` automatically)
+3. Submit a PR
+
+### Translating Documentation
+
+1. Create a translated file alongside the original (e.g. `docs/<name>.ar.md`)
+2. Maintain formatting and structure
+3. Submit a PR
 
 ---
 
@@ -481,23 +355,16 @@ Help us make this project accessible to Arabic speakers!
 
 - **GitHub Discussions**: General questions and discussions
 - **GitHub Issues**: Bug reports and feature requests
-- **Email**: [Coming soon]
 
 ### Getting Help
 
-If you need help:
-
-1. Check the [documentation](docs/)
+1. Check the [documentation](docs/) and [`docs/architecture.md`](docs/architecture.md)
 2. Search [existing issues](https://github.com/TripoliLabs/air-quality-monitoring/issues)
 3. Ask in [GitHub Discussions](https://github.com/TripoliLabs/air-quality-monitoring/discussions)
-4. Reach out to maintainers
 
 ### Recognition
 
-Contributors will be:
-- Listed in `AUTHORS.md`
-- Mentioned in release notes
-- Thanked in project communications
+Contributors will be listed in release notes and thanked in project communications.
 
 ---
 
@@ -509,6 +376,6 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ## Questions?
 
-Don't hesitate to ask! We're here to help. Create a [GitHub Discussion](https://github.com/TripoliLabs/air-quality-monitoring/discussions) or reach out to the maintainers.
+Don't hesitate to ask! Create a [GitHub Discussion](https://github.com/TripoliLabs/air-quality-monitoring/discussions) or reach out to the maintainers.
 
 Thank you for contributing to cleaner air in Tripoli!

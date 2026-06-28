@@ -1,0 +1,39 @@
+{
+  "name": "@aq/ingestion",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Telemetry ingestion pipeline: MQTT → decode → validate → AQI → TimescaleDB",
+  "license": "AGPL-3.0",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check src",
+    "clean": "rm -rf dist",
+    "test:integration": "vitest run"
+  },
+  "dependencies": {
+    "@aq/contracts": "workspace:*",
+    "@aq/db": "workspace:*",
+    "@aq/domain": "workspace:*",
+    "@aq/observability": "workspace:*",
+    "@aq/telemetry-codec": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^3.2.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "ioredis": "^5.4.0",
+    "mqtt": "^5.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@aq/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Drizzle schema + migrations + typed clients for both databases (relational + telemetry)",
+  "license": "AGPL-3.0",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "migrate:relational": "drizzle-kit migrate --config=drizzle.relational.config.ts",
+    "migrate:telemetry": "drizzle-kit migrate --config=drizzle.telemetry.config.ts",
+    "db:seed": "node dist/seed.js",
+    "generate:relational": "drizzle-kit generate --config=drizzle.relational.config.ts",
+    "generate:telemetry": "drizzle-kit generate --config=drizzle.telemetry.config.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.0",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  }
+}

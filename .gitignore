@@ -552,3 +552,9 @@ crash/
 
 # Thumbnails
 ._*
+
+# Turborepo
+.turbo
+
+# firmware host build artifacts
+firmware/build/
