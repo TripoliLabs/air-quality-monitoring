@@ -58,7 +58,10 @@ async function rest<T = Record<string, unknown>>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
-  if (res.status === 409) return {} as T; // already exists — idempotent
+  // Idempotent creates: ChirpStack returns 409 for some resources, but a plain
+  // 500 with a unique-constraint violation for others (e.g. gateways) when the
+  // resource already exists. Treat both as success so re-provisioning is safe.
+  if (res.status === 409 || /duplicate key|already exists/i.test(text)) return {} as T;
   if (!res.ok) throw new Error(`${method} ${path} → ${res.status} ${text}`);
   return (text ? JSON.parse(text) : {}) as T;
 }
