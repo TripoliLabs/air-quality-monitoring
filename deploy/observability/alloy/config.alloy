@@ -1,0 +1,81 @@
+// ============================================================================
+// Grafana Alloy — LOCAL collector for the air-quality stack.
+//
+// Sibling: config.cloud.alloy (Grafana Cloud, used on staging/prod). Keep the
+// three pipelines below in sync between the two files; only the *exporters*
+// (endpoints + auth) differ.
+//
+// Flow: services push OTLP traces here; Alloy scrapes their Prometheus metrics
+// and tails container logs, forwarding all three to the local LGTM backends.
+// ============================================================================
+
+logging {
+  level = "info"
+}
+
+// ------------------------------- TRACES -------------------------------------
+// Services export OTLP to this receiver (OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318).
+otelcol.receiver.otlp "in" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlphttp.traces.input]
+  }
+}
+
+otelcol.exporter.otlphttp "traces" {
+  client {
+    endpoint = "http://tempo:4318"
+    tls { insecure = true }
+  }
+}
+
+// ------------------------------- METRICS ------------------------------------
+// Scrape the services' OpenTelemetry Prometheus exporters, remote-write to Prometheus.
+prometheus.scrape "services" {
+  targets = [
+    { "__address__" = "api:9464", "service" = "api" },
+    { "__address__" = "ingestion:9464", "service" = "ingestion" },
+  ]
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+// -------------------------------- LOGS --------------------------------------
+// Tail every container's stdout/stderr and ship to Loki.
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

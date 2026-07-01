@@ -5,7 +5,7 @@ import {
 } from '@aq/contracts';
 import { createTelemetryDb, readings, type TelemetryDb } from '@aq/db';
 import { calculateAqi } from '@aq/domain';
-import { createLogger } from '@aq/observability';
+import { createCounter, createLogger } from '@aq/observability';
 import { decodeUplink } from '@aq/telemetry-codec';
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +19,10 @@ const LATEST_KEY = (deviceId: string): string => `sensor:latest:${deviceId}`;
 @Injectable()
 export class IngestionService implements OnModuleInit, OnModuleDestroy {
   private readonly log = createLogger('ingestion');
+  private readonly readingsIngested = createCounter(
+    'readings_ingested',
+    'Uplinks decoded, AQI-computed, and persisted',
+  );
   private readonly db: TelemetryDb;
   private readonly redis: Redis;
   private client?: MqttClient;
@@ -111,6 +115,7 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       await this.redis.set(LATEST_KEY(deviceId), JSON.stringify(event.payload));
       await this.redis.publish(READINGS_CHANNEL, JSON.stringify(event));
 
+      this.readingsIngested.add(1, { category: aqi.category });
       this.log.info('reading ingested', { deviceId, aqi: aqi.aqi, category: aqi.category });
     } catch (err) {
       this.log.error('failed to ingest uplink', { topic, error: String(err) });

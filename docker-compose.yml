@@ -9,7 +9,7 @@
 #
 # Usage:
 #   docker compose up -d                          # default: db, redis, mqtt, ChirpStack
-#   docker compose --profile observability up -d  # + Grafana / Prometheus / Loki
+#   docker compose --profile observability up -d  # + Alloy/Grafana/Prometheus/Loki/Tempo
 #   docker compose down                           # stop (add -v to wipe volumes)
 #
 # Connection defaults (override via a root .env file):
@@ -17,7 +17,7 @@
 #   Redis              : localhost:6379
 #   MQTT               : localhost:1883   (ws: 9001)
 #   ChirpStack UI      : http://localhost:8080
-#   Grafana            : http://localhost:3001  (admin/admin)
+#   Grafana            : http://localhost:3002  (admin/admin)
 #   Prometheus         : http://localhost:9090
 # =============================================================================
 
@@ -163,7 +163,7 @@ services:
   # deploy/observability/ — this is a lean local subset.
   # ===========================================================================
   grafana:
-    image: grafana/grafana:11
+    image: grafana/grafana:latest
     container_name: airquality-grafana
     restart: unless-stopped
     profiles: ["observability"]
@@ -190,10 +190,11 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver" # Alloy pushes scraped metrics here
 
   # Loki runs with its built-in default config (no mount required for local dev).
   loki:
-    image: grafana/loki:3
+    image: grafana/loki:latest
     container_name: airquality-loki
     restart: unless-stopped
     profiles: ["observability"]
@@ -202,21 +203,45 @@ services:
     volumes:
       - loki_data:/loki
 
-  # Tempo — traces backend; receives OTLP/HTTP on :4318 from the services.
-  # Enable trace export by setting OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
-  # when bringing up the stack with this profile.
+  # Tempo — traces backend; receives OTLP from Alloy.
   tempo:
-    image: grafana/tempo:2
+    image: grafana/tempo:2.6.1
     container_name: airquality-tempo
     restart: unless-stopped
     profiles: ["observability"]
     command: ["-config.file=/etc/tempo/tempo.yml"]
     ports:
       - "3200:3200" # Tempo query API (Grafana datasource)
-      - "4318:4318" # OTLP/HTTP receiver
     volumes:
       - ./deploy/observability/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo_data:/var/tempo
+
+  # Alloy — the telemetry collector. Services push OTLP traces here (set
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318); Alloy scrapes their Prometheus
+  # metrics (:9464) and tails container logs, forwarding all three to the local
+  # LGTM backends. For Grafana Cloud, mount config.cloud.alloy + set GRAFANA_CLOUD_*
+  # (see deploy/observability/README.md).
+  alloy:
+    image: grafana/alloy:latest
+    container_name: airquality-alloy
+    restart: unless-stopped
+    profiles: ["observability"]
+    user: root # needs the Docker socket to tail container logs
+    command:
+      - "run"
+      - "/etc/alloy/config.alloy"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+    ports:
+      - "4318:4318" # OTLP/HTTP in (from services)
+      - "12345:12345" # Alloy UI
+    volumes:
+      - ./deploy/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
 
   # ===========================================================================
   # Migrations — one-shot, runs to completion before the apps start.

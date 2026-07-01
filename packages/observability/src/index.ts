@@ -5,6 +5,7 @@
  * auto-instrumentations can patch modules before they are imported.
  * See deploy/observability/.
  */
+import { type Counter, metrics } from '@opentelemetry/api';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -73,4 +74,12 @@ export function initTelemetry(service: string): void {
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
+}
+
+/**
+ * Create an OpenTelemetry counter (exposed on the Prometheus endpoint as
+ * `<name>_total`). Uses the global meter provider set up by initTelemetry().
+ */
+export function createCounter(name: string, description?: string): Counter {
+  return metrics.getMeter('@aq/observability').createCounter(name, { description });
 }

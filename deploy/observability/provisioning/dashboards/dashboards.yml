@@ -1,0 +1,13 @@
+# Auto-provision dashboards from this directory.
+apiVersion: 1
+providers:
+  - name: air-quality
+    orgId: 1
+    folder: Air Quality
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

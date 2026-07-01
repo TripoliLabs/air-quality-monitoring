@@ -1,44 +1,58 @@
-# Monitoring
+# Observability
 
-This directory contains Grafana dashboards and Prometheus configuration for system monitoring.
+OpenTelemetry from the services, collected by **Grafana Alloy**, into an
+LGTM-style backend — the self-hosted stack locally, and **Grafana Cloud** on
+staging/prod. The application code and the Alloy pipelines are identical across
+environments; only Alloy's *exporters* change.
 
-## Stack
+```
+ api, ingestion ──OTLP traces──►┐
+   (:9464 Prometheus metrics) ──►│  Grafana Alloy  ├─► Tempo   (traces)   / Grafana Cloud
+   (container stdout logs)    ──►┘  (collector)    ├─► Prometheus (metrics)/ Grafana Cloud
+                                                   └─► Loki   (logs)      / Grafana Cloud
+```
 
-- **Grafana** - Visualization and dashboards
-- **Prometheus** - Metrics collection
-- **Loki** - Log aggregation
+- **Traces** — services export OTLP to Alloy (`OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318`).
+- **Metrics** — each service exposes an OTel Prometheus endpoint on `:9464`
+  (HTTP server latency, Node.js runtime, and a custom `readings_ingested_total`
+  counter). Alloy scrapes them and remote-writes onward.
+- **Logs** — Alloy tails container stdout/stderr and ships to Loki.
 
-## Dashboards
+## Run locally
 
-- `air-quality-overview.json` - Main dashboard showing all sensors
-- `sensor-detail.json` - Detailed view for individual sensors
-- `system-health.json` - Backend and infrastructure health
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318 docker compose --profile observability up -d
+```
 
-## Metrics Collected
+- **Grafana** → http://localhost:3002 (`admin` / `admin`) — datasources
+  (Prometheus/Tempo/Loki) and the **Air Quality — Services** dashboard are
+  auto-provisioned. Traces and logs are explorable via Grafana → Explore.
+- **Alloy UI** → http://localhost:12345 · **Prometheus** → http://localhost:9090
 
-### Application Metrics
-- Sensor readings (PM2.5, PM10, temperature, humidity)
-- AQI calculations
-- API request latency
-- MQTT message throughput
+Files: `alloy/config.alloy` (local collector), `prometheus.yml`, `tempo.yml`,
+`provisioning/` (Grafana datasources + dashboards).
 
-### Infrastructure Metrics
-- Container resource usage (CPU, memory)
-- Database connections and query performance
-- Redis cache hit/miss rates
-- LoRaWAN gateway statistics
+## Grafana Cloud (staging / prod)
 
-## Setup
+Same services, same Alloy pipelines — swap the mounted config and provide the
+Cloud credentials. No self-hosted Grafana/Prometheus/Loki/Tempo needed; you view
+everything in your Grafana Cloud stack.
 
-Grafana and Prometheus are included in the Docker Compose setup.
+1. Mount **`alloy/config.cloud.alloy`** at `/etc/alloy/config.alloy` instead of
+   the local one.
+2. Set the `GRAFANA_CLOUD_*` environment variables (from your Cloud stack's
+   "Connections → Add data / OTLP / Prometheus / Loki" pages). These are managed
+   as GitHub Environment secrets — see the tracking issue and the list below.
 
-Access Grafana at: http://localhost:3001
-- Default credentials: admin/admin
+| Variable | What it is |
+|---|---|
+| `GRAFANA_CLOUD_API_TOKEN` | Cloud Access Policy token with metrics/logs/traces **write** scopes |
+| `GRAFANA_CLOUD_TEMPO_ENDPOINT` | OTLP endpoint, e.g. `https://otlp-gateway-<zone>.grafana.net/otlp` |
+| `GRAFANA_CLOUD_TEMPO_USER` | OTLP / stack instance id |
+| `GRAFANA_CLOUD_PROM_URL` | Prometheus remote-write URL, e.g. `https://prometheus-<zone>.grafana.net/api/prom/push` |
+| `GRAFANA_CLOUD_PROM_USER` | Prometheus instance id |
+| `GRAFANA_CLOUD_LOKI_URL` | Loki push URL, e.g. `https://logs-<zone>.grafana.net/loki/api/v1/push` |
+| `GRAFANA_CLOUD_LOKI_USER` | Loki instance id |
 
-## Alerts
-
-Configured alerts:
-- Sensor offline for > 30 minutes
-- AQI exceeds unhealthy threshold
-- Low battery warning
-- API error rate spike
+> The two Alloy configs are siblings — keep the three pipelines in sync; only the
+> exporters differ.

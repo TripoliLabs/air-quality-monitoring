@@ -1,0 +1,97 @@
+// ============================================================================
+// Grafana Alloy — GRAFANA CLOUD collector (staging / prod).
+//
+// Sibling of config.alloy (local). The three pipelines (receive traces, scrape
+// service metrics, tail container logs) are IDENTICAL to the local file — only
+// the exporters at the end differ: they point at Grafana Cloud with auth.
+//
+// Required env vars (see deploy/observability/README.md + the GitHub issue):
+//   GRAFANA_CLOUD_API_TOKEN         Cloud Access Policy token (write scopes)
+//   GRAFANA_CLOUD_TEMPO_ENDPOINT    e.g. https://otlp-gateway-<zone>.grafana.net/otlp
+//   GRAFANA_CLOUD_TEMPO_USER        OTLP instance/stack id
+//   GRAFANA_CLOUD_PROM_URL          e.g. https://prometheus-<zone>.grafana.net/api/prom/push
+//   GRAFANA_CLOUD_PROM_USER         Prometheus instance id
+//   GRAFANA_CLOUD_LOKI_URL          e.g. https://logs-<zone>.grafana.net/loki/api/v1/push
+//   GRAFANA_CLOUD_LOKI_USER         Loki instance id
+// ============================================================================
+
+logging {
+  level = "info"
+}
+
+// ------------------------------- TRACES -------------------------------------
+otelcol.receiver.otlp "in" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlphttp.traces.input]
+  }
+}
+
+otelcol.exporter.otlphttp "traces" {
+  client {
+    endpoint = sys.env("GRAFANA_CLOUD_TEMPO_ENDPOINT")
+    auth     = otelcol.auth.basic.cloud.handler
+  }
+}
+
+otelcol.auth.basic "cloud" {
+  username = sys.env("GRAFANA_CLOUD_TEMPO_USER")
+  password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+}
+
+// ------------------------------- METRICS ------------------------------------
+prometheus.scrape "services" {
+  targets = [
+    { "__address__" = "api:9464", "service" = "api" },
+    { "__address__" = "ingestion:9464", "service" = "ingestion" },
+  ]
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROM_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROM_USER")
+      password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+    }
+  }
+}
+
+// -------------------------------- LOGS --------------------------------------
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+      password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+    }
+  }
+}
