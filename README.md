@@ -21,7 +21,7 @@ Open-source distributed air quality monitoring system using solar-powered LoRaWA
 | Firmware | Network | Backend | Database | Frontend | Tooling |
 |----------|---------|---------|----------|----------|---------|
 | ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white) | ![LoRaWAN](https://img.shields.io/badge/LoRaWAN-00A9CE?style=for-the-badge&logo=lora&logoColor=white) | ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white) | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white) | ![Vue.js](https://img.shields.io/badge/Vue.js-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white) | ![pnpm](https://img.shields.io/badge/pnpm-F69220?style=for-the-badge&logo=pnpm&logoColor=white) |
-| ![ESP-IDF](https://img.shields.io/badge/ESP--IDF-E7352C?style=for-the-badge&logo=espressif&logoColor=white) | ![EMQX](https://img.shields.io/badge/EMQX-00B173?style=for-the-badge&logo=emqx&logoColor=white) | ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) | ![TimescaleDB](https://img.shields.io/badge/TimescaleDB-FDB515?style=for-the-badge&logo=timescale&logoColor=black) | ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white) | ![Biome](https://img.shields.io/badge/Biome-60A5FA?style=for-the-badge&logo=biome&logoColor=white) |
+| ![ESP-IDF](https://img.shields.io/badge/ESP--IDF-E7352C?style=for-the-badge&logo=espressif&logoColor=white) | ![Mosquitto](https://img.shields.io/badge/Mosquitto-3C5280?style=for-the-badge&logo=eclipsemosquitto&logoColor=white) | ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) | ![TimescaleDB](https://img.shields.io/badge/TimescaleDB-FDB515?style=for-the-badge&logo=timescale&logoColor=black) | ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white) | ![Biome](https://img.shields.io/badge/Biome-60A5FA?style=for-the-badge&logo=biome&logoColor=white) |
 | ![PlatformIO](https://img.shields.io/badge/PlatformIO-F5822A?style=for-the-badge&logo=platformio&logoColor=white) | ![ChirpStack](https://img.shields.io/badge/ChirpStack-00A8E1?style=for-the-badge&logo=chirpstack&logoColor=white) | | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white) | ![MapLibre](https://img.shields.io/badge/MapLibre-396CB2?style=for-the-badge&logo=maplibre&logoColor=white) | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white) |
 
 </div>
@@ -105,7 +105,7 @@ Lebanon faces severe air quality challenges from:
          │ Internet (UDP/MQTT)
          │
 ┌────────▼────────────────────────────────────────┐
-│  Cloud Server (DigitalOcean)                    │
+│  Cloud Server (Hetzner VM)                      │
 │  ┌──────────────────────────────────────────┐  │
 │  │  ChirpStack (LoRaWAN Network Server)     │  │
 │  │  Decrypts, deduplicates, validates data  │  │
@@ -128,8 +128,8 @@ Lebanon faces severe air quality challenges from:
 │  └────┬───────────────────────────┘            │
 │       │                                          │
 │  ┌────▼──────────┐  ┌────────────────┐        │
-│  │ Vue.js        │  │ Grafana        │        │
-│  │ Dashboard     │  │ Monitoring     │        │
+│  │ Vue.js        │  │ Alloy →        │        │
+│  │ Dashboard     │  │ Grafana Cloud  │        │
 │  └───────────────┘  └────────────────┘        │
 └─────────────────────────────────────────────────┘
 ```
@@ -145,16 +145,17 @@ Lebanon faces severe air quality challenges from:
 | **Frontend Linting** | ESLint + Prettier | 9+ | Full Vue template support with eslint-plugin-vue |
 | **Firmware** | C++ + ESP-IDF | 5.x | Battery efficiency, ULP coprocessor support, proven at scale |
 | **Network Server** | ChirpStack | 4.x | Open source LoRaWAN, works offline |
-| **Message Broker** | EMQX (prod) / NanoMQ (local) | - | Scalable cloud MQTT; lightweight local broker |
+| **Message Broker** | Mosquitto (self-hosted) | 2.x | Internal glue for ChirpStack; same broker in dev + prod |
 | **Backend** | NestJS | 11+ | Type-safe, modular architecture, great DX |
 | **Language** | TypeScript | 5.9+ | Type safety, excellent tooling |
-| **Telemetry DB** | TimescaleDB on TigerData | 2.x | 100x compression, continuous aggregates, retention |
-| **Relational DB** | DO Managed PostgreSQL | 16 | App metadata + ChirpStack state |
+| **Telemetry DB** | TimescaleDB (self-hosted, full TSL) | 2.x | 100x compression, continuous aggregates, retention |
+| **Relational DB** | PostgreSQL (self-hosted) | 16 | App metadata + ChirpStack state |
 | **Cache** | Redis | 7.x | Sub-millisecond reads |
 | **Frontend** | Vue.js | 3.5+ | Lightweight, reactive, intuitive API |
 | **Build Tool** | Vite | 7+ | Fast HMR, optimized builds |
 | **Maps** | MapLibre GL JS | 4+ | Open source, no API keys, WebGL-accelerated |
-| **Hosting** | DigitalOcean | - | $24/month covers everything |
+| **Observability** | OpenTelemetry + Grafana Alloy → Grafana Cloud | - | Off-box telemetry survives incidents; LGTM stack is local-only |
+| **Hosting** | Hetzner Cloud (self-hosted VMs) | - | ~$15–25/mo per box; staging (simulator) + prod (real hardware) |
 
 ---
 
@@ -177,9 +178,9 @@ air-quality-monitoring/
 │   └── observability/    # @aq/observability — logger / OTel
 ├── firmware/             # ESP32 sensor firmware (C++, PlatformIO)
 ├── edge/chirpstack/      # ChirpStack (LoRaWAN) configuration
-├── infra/                # OpenTofu (DigitalOcean)
+├── infra/                # OpenTofu (Hetzner)
 ├── deploy/               # observability stack + on-prem provisioning
-├── database/ · mqtt/     # local Postgres init · NanoMQ config
+├── database/ · mqtt/     # local Postgres init · Mosquitto config
 ├── hardware/ · docs/     # BOMs / documentation
 ├── turbo.json · pnpm-workspace.yaml · tsconfig.base.json · biome.json
 └── docker-compose.yml    # local full stack
@@ -227,14 +228,14 @@ pnpm install        # installs all workspaces (backend, frontend)
 **4. Start the backing services:**
 ```bash
 docker compose up -d                          # default stack
-docker compose --profile observability up -d  # + Grafana / Prometheus / Loki
+docker compose --profile observability up -d  # + Alloy/Grafana/Prometheus/Loki/Tempo
 ```
 
 This starts:
 - Relational Postgres → localhost:5432
 - TimescaleDB (telemetry) → localhost:5439
 - Redis (cache) → localhost:6379
-- NanoMQ (MQTT broker) → localhost:1883
+- Mosquitto (MQTT broker) → localhost:1883
 - ChirpStack (LoRaWAN server) → http://localhost:8080
 
 **5. Run the apps (host, hot reload):**
@@ -324,9 +325,9 @@ will be added under `docs/` as the platform matures.
 | Item | Cost |
 |------|------|
 | Dragino DLOS8N (8-ch SX1302, EU868, EC25-E 4G) | ~$200 |
-| DigitalOcean hosting | $24/month |
+| Hetzner hosting (per box) | ~$15-25/month |
 | Domain name | $12/year |
-| **Total monthly** | **~$25-30** |
+| **Total monthly** | **~$16-26** |
 
 ### Deployment Examples
 
@@ -334,7 +335,7 @@ will be added under `docs/` as the platform matures.
 - **Neighborhood (50 sensors + 2 gateways):** ~$3,100-3,600 one-time + $30/month
 - **City-scale (200 sensors + 5 gateways):** ~$12,000-14,000 one-time + $30/month
 
-**Note:** With cloud provider nonprofit credits (AWS, DigitalOcean), hosting can be $0/month for first 1-2 years.
+**Note:** Hetzner is the sustainable baseline (~$15-25/box). Cloud nonprofit credits (AWS/Azure/DO) are bonus runway, not the plan.
 
 ---
 

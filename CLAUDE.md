@@ -13,6 +13,10 @@ Open-source distributed air quality monitoring network for Tripoli, Lebanon usin
 > **Canonical architecture & decisions:** see [`docs/architecture.md`](docs/architecture.md)
 > for the monorepo layout and the adopted ADRs (two-DB topology, Drizzle, Zod
 > contracts, pnpm+Node, Biome/ESLint split).
+>
+> **Deployment & hosting strategy:** see [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md)
+> — Hetzner (self-hosted, staging + prod), self-hosted Timescale (TigerData retired),
+> Mosquitto, Alloy → Grafana Cloud, backups, secrets delivery, firmware roadmap.
 
 ## Architecture Overview
 
@@ -27,24 +31,27 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
                                                 │
                           ┌─────────────────────┼─────────────────────┐
                           ↓                     ↓                     ↓
-                   TigerData             Redis Pub/Sub          Redis Cache
+                   Timescale             Redis Pub/Sub          Redis Cache
                    (TimescaleDB:         (real-time events)     (latest values)
                     readings)                  ↓
                           ↑            NestJS WebSocket Gateway
                           │                     ↓
-   DO Managed Postgres ───┤  NestJS REST API ←── Vue.js Dashboard
+   Self-hosted Postgres ──┤  NestJS REST API ←── Vue.js Dashboard
    (relational metadata) ─┘  (reads both DBs; metadata joined in app layer)
 ```
 
 **Data paths:**
-- **Historical queries:** Vue.js → REST API → TigerData (telemetry) + DO Managed Postgres (metadata)
+- **Historical queries:** Vue.js → REST API → TimescaleDB (telemetry) + PostgreSQL (metadata)
 - **Real-time updates:** Redis Pub/Sub → WebSocket Gateway → Vue.js (Socket.IO)
 - **Latest values:** Vue.js → REST API → Redis Cache
 
-> **Two managed databases** (see ADR-001): time-series readings live on **TigerData**
-> (managed TimescaleDB, full TSL — compression/continuous-aggregates/retention);
-> relational app data + ChirpStack state live on **DO Managed Postgres**. They do
+> **Two databases** (see ADR-001, now self-hosted): time-series readings live on
+> **self-hosted TimescaleDB** (full TSL — compression/continuous-aggregates/retention);
+> relational app data + ChirpStack state live on **self-hosted PostgreSQL**. They do
 > not cross-join natively — readings are enriched with metadata in the app layer.
+> On Hetzner we self-host both (TigerData retired), so the split is now a *choice*
+> (isolate ingestion write-load) and can be co-located — see
+> [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md).
 
 ### Technology Stack
 
@@ -52,18 +59,18 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 **Language:** TypeScript 5.9+
 **Firmware:** C++ with ESP-IDF 5.x + PlatformIO (ESP32)
 **Network Server:** ChirpStack v4 (self-hosted LoRaWAN network server)
-**Message Broker:** EMQX (production) · NanoMQ (local dev) — identical MQTT contract
+**Message Broker:** Mosquitto (self-hosted, dev + prod — internal glue for ChirpStack) *(migrating from the current NanoMQ; see [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md))*
 **Backend:** NestJS 11+ (modular Node.js framework)
-**Telemetry DB:** TigerData / Tiger Cloud — managed TimescaleDB, full TSL edition (compression, continuous aggregates, retention)
-**Relational DB:** DigitalOcean Managed PostgreSQL 16 (app data + ChirpStack state)
+**Telemetry DB:** Self-hosted TimescaleDB, full TSL edition (compression, continuous aggregates, retention) — TigerData retired
+**Relational DB:** Self-hosted PostgreSQL 16 (app data + ChirpStack state)
 **DB access:** Drizzle ORM (both DBs; `--custom` SQL migrations for Timescale DDL) (ADR-001)
 **API contracts:** Zod 4 (shared package) + nestjs-zod → auto OpenAPI (ADR-002)
 **Cache/PubSub:** Redis 7.x (caching + Pub/Sub for real-time WebSocket broadcast)
 **Frontend:** Vue.js 3.5+ + Vite 7+ + Tailwind CSS
 **Maps:** MapLibre GL JS 4+ + OpenStreetMap tiles (open source, no API keys)
 **Charts:** Apache ECharts (better for real-time time-series data)
-**Observability:** Grafana LGTM stack (Loki, Grafana, Tempo, Mimir) + Prometheus + OpenTelemetry
-**Orchestration:** Docker Compose (local) · OpenTofu on DigitalOcean (cloud)
+**Observability:** OpenTelemetry → Grafana Alloy → **Grafana Cloud** (prod) · self-hosted LGTM stack local-only (dev)
+**Orchestration:** Docker Compose (local) · OpenTofu on **Hetzner Cloud** (staging + prod)
 
 ### Tooling
 
@@ -115,7 +122,7 @@ air-quality-monitoring/
 │   └── platformio.ini     #   ESP-IDF build
 ├── edge/
 │   └── chirpstack/        # ChirpStack v4 config (gateway)
-├── infra/                 # OpenTofu (DigitalOcean) — modules/ + environments/
+├── infra/                 # OpenTofu (Hetzner) — modules/ + environments/
 ├── deploy/
 │   ├── observability/     # LGTM stack configs (Prometheus, Grafana provisioning)
 │   └── onprem/            # gateway-box provisioning (ansible/cloud-init)
@@ -231,8 +238,8 @@ seeds the sensor fixtures, then api/ingestion start. The **`simulator`** emits
 realistic ChirpStack uplinks for the fixture nodes, so the pipeline runs on live
 data (simulator → NanoMQ → ingestion → TimescaleDB + Redis → API).
 
-Local Postgres (5432) is the relational stand-in for DO Managed Postgres;
-local TimescaleDB (5439) is the full-TSL stand-in for TigerData.
+Local Postgres (5432) and TimescaleDB (5439, full-TSL) mirror the self-hosted
+relational + telemetry DBs that run on the Hetzner box in staging/prod.
 
 ### Pre-commit Hooks (Lefthook)
 
@@ -291,24 +298,30 @@ ChirpStack + simulator pipeline) and the ESP32 cross-compile
 - Cost-effective at scale (200+ sensors)
 - Can operate offline if needed
 
-### Why TimescaleDB (hosted on TigerData)?
+### Why TimescaleDB (self-hosted, full TSL)?
 - 10-100x compression on time-series data
 - Continuous aggregates (auto-updating materialized views)
 - Real PostgreSQL (relational + time-series in one engine)
 - Automatic retention policies for data cleanup
-- **Hosting:** these TSL features require **TigerData** (managed) or self-hosting —
-  DO Managed Postgres ships the **Apache-2.0 edition only**, where compression,
-  continuous aggregates, and retention error out. Hence the two-DB split (ADR-001).
+- **Hosting:** the TSL features (compression/continuous-aggregates/retention) need
+  the full edition. We **self-host it on the Hetzner box** (just Postgres + the
+  extension) — no managed telemetry DB. TigerData is retired; DO Managed Postgres
+  was never viable (Apache-2.0 edition only). See docs/deployment-and-strategy.md.
 
 ### Why two separate databases? (ADR-001)
-- DO Managed Postgres can't run the required Timescale TSL features → telemetry
-  must go to TigerData; relational data is happy (and cheaper, managed-HA) on DO.
-- Also isolates ingestion write-load from app reads, with independent scaling/backups.
+- Historically forced: DO Managed Postgres couldn't run Timescale TSL. **Self-hosting
+  on Hetzner removes that constraint**, so the split is now a *choice* — isolate
+  ingestion write-load from app reads — and both can be **co-located on one box**
+  for Phase 1 (one thing to back up/patch). Split onto separate boxes when load demands.
 
-### Why EMQX (prod) / NanoMQ (local)?
-- **EMQX** in production: cloud-native, scalable, MQTT 5.0, free tier fits project scale.
-- **NanoMQ** for local dev: lightweight C/NNG broker, tiny footprint, same MQTT
-  contract (same EMQ ecosystem) so app code is identical across both.
+### Why Mosquitto (self-hosted, dev + prod)?
+- The broker is **internal glue** (`gateway-bridge → MQTT → ChirpStack → MQTT →
+  ingestion`) — all co-located, effectively localhost IPC. A managed cloud broker
+  adds latency/cost/coupling for zero benefit at our throughput.
+- **Mosquitto** is the battle-tested, ChirpStack-canonical reference broker; same
+  broker everywhere kills "works locally, breaks in prod." Retires the old
+  EMQX-prod / NanoMQ-local split. *(Swap from the current NanoMQ is pending — see
+  docs/deployment-and-strategy.md §2.)*
 
 ### Why Drizzle ORM? (ADR-001)
 - One tool for **both** databases (no mixing query libraries); best Node/Bun story.
@@ -443,13 +456,13 @@ Closes #123
    - Subscribes to MQTT via microservice transport
    - Decodes the LoRa payload (`@aq/telemetry-codec`) and validates with Zod (`@aq/contracts`)
    - Calculates AQI (Air Quality Index)
-   - Writes readings to TigerData (TimescaleDB) via Drizzle (persistence)
+   - Writes readings to TimescaleDB via Drizzle (persistence)
    - Publishes to Redis Pub/Sub channel (real-time broadcast)
    - Updates Redis cache (latest values per sensor)
 6. **NestJS WebSocket gateway**:
    - Subscribes to Redis Pub/Sub channel
    - Broadcasts new readings to connected clients via Socket.IO
-7. **NestJS REST API** serves historical readings from TigerData + metadata from DO Postgres, latest from Redis
+7. **NestJS REST API** serves historical readings from TimescaleDB + metadata from Postgres, latest from Redis
 8. **Vue.js dashboard** receives real-time updates via WebSocket, fetches history via REST
 
 ### Data Format
@@ -518,7 +531,7 @@ Sensor readings JSON structure:
 
 **Infrastructure:**
 - ChirpStack Docs: https://www.chirpstack.io/docs/
-- TigerData (TimescaleDB) Docs: https://docs.tigerdata.com/
+- TimescaleDB Docs: https://docs.timescale.com/
 - TimescaleDB Docs: https://docs.timescale.com/
 - OpenTofu Docs: https://opentofu.org/docs/
 - MapLibre GL JS: https://maplibre.org/maplibre-gl-js/docs/
