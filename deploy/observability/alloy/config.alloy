@@ -61,6 +61,14 @@ discovery.docker "containers" {
 
 discovery.relabel "containers" {
   targets = discovery.docker.containers.targets
+  // Ship only the app services' logs; infra containers (ChirpStack, broker, DBs,
+  // the observability stack itself) stay out of Loki — keeps the Grafana Cloud
+  // free tier (50 GB/mo) in budget. Widen this regex if you need more locally.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/airquality-(api|ingestion|simulator)"
+    action        = "keep"
+  }
   rule {
     source_labels = ["__meta_docker_container_name"]
     regex         = "/(.*)"
