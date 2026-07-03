@@ -1,0 +1,15 @@
+# OTA-capable partition table for the ESP32 (4 MB flash, T-Beam V1.2).
+# Referenced by platformio.ini (board_build.partitions). Two app slots
+# (ota_0/ota_1) + otadata make over-the-air / BLE updates possible later; today
+# the firmware boots the factory app and OTA is unused (see
+# docs/deployment-and-strategy.md §5e).
+#
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x4000,
+otadata,    data, ota,     0xd000,   0x2000,
+phy_init,   data, phy,     0xf000,   0x1000,
+factory,    app,  factory, 0x10000,  0x100000,
+ota_0,      app,  ota_0,   0x110000, 0x100000,
+ota_1,      app,  ota_1,   0x210000, 0x100000,
+spiffs,     data, spiffs,  0x310000, 0xE0000,
+coredump,   data, coredump,0x3F0000, 0x10000,

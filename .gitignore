@@ -458,6 +458,8 @@ sensor-logs/
 sensor-data/
 *.csv
 *.dat
+# ...but the ESP32 partition table is real source, not sensor data.
+!firmware/partitions.csv
 
 # Hardware test results
 hardware-test-results/
