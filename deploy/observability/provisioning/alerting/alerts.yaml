@@ -1,0 +1,73 @@
+# Grafana unified-alerting rules (auto-provisioned). Built on the metrics the
+# services actually emit via Alloy. In Grafana Cloud these same rules attach to a
+# contact point (Slack/email/PagerDuty) per environment; locally they just
+# evaluate and show state. Node-level alerts (battery low, disk >80%) need extra
+# metrics (a battery gauge + node_exporter) — see docs/deployment-and-strategy.md §4.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: pipeline
+    folder: Air Quality
+    interval: 1m
+    rules:
+      - uid: aq-no-readings
+        title: Ingestion stalled (no readings)
+        condition: C
+        for: 5m
+        noDataState: Alerting
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: No readings ingested in the last 5 minutes — the pipeline may be down.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum(rate(readings_ingested_total[5m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [0.001]
+
+      - uid: aq-api-5xx
+        title: API 5xx errors
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: The API is returning 5xx responses.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum(rate(http_server_duration_count{service="api", http_status_code=~"5.."}[5m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
