@@ -127,7 +127,7 @@ air-quality-monitoring/
 │   ├── observability/     # LGTM stack configs (Prometheus, Grafana provisioning)
 │   └── onprem/            # gateway-box provisioning (ansible/cloud-init)
 ├── database/init/         # local Postgres init (pg_trgm for ChirpStack)
-├── mqtt/                  # local NanoMQ config
+├── mqtt/                  # local Mosquitto config
 ├── hardware/ · docs/      # BOMs / documentation
 ├── turbo.json · tsconfig.base.json · biome.json · pnpm-workspace.yaml
 └── docker-compose.yml     # local full-stack (data plane + api/ingestion/dashboard)
@@ -236,7 +236,7 @@ On `up`, the one-shot **`migrate`** service applies both DBs' migrations (incl. 
 custom TimescaleDB hypertable/continuous-aggregate/compression/retention SQL) and
 seeds the sensor fixtures, then api/ingestion start. The **`simulator`** emits
 realistic ChirpStack uplinks for the fixture nodes, so the pipeline runs on live
-data (simulator → NanoMQ → ingestion → TimescaleDB + Redis → API).
+data (simulator → Mosquitto → ingestion → TimescaleDB + Redis → API).
 
 Local Postgres (5432) and TimescaleDB (5439, full-TSL) mirror the self-hosted
 relational + telemetry DBs that run on the Hetzner box in staging/prod.
@@ -276,7 +276,7 @@ only. Two jobs:
   → `make -C firmware test` (firmware host tests). Turbo caches unchanged packages.
 - **integration** — a **slim** stack: `docker compose up -d --build api ingestion`
   brings up only the API + ingestion + their stores (Postgres, TimescaleDB, Redis,
-  NanoMQ) via `depends_on`, then runs the API + ingestion integration tests, then
+  Mosquitto) via `depends_on`, then runs the API + ingestion integration tests, then
   `docker compose down -v`.
 
 **Run locally, not in CI** (too heavy/flaky or unverifiable on a shared runner):
@@ -320,7 +320,7 @@ ChirpStack + simulator pipeline) and the ESP32 cross-compile
   adds latency/cost/coupling for zero benefit at our throughput.
 - **Mosquitto** is the battle-tested, ChirpStack-canonical reference broker; same
   broker everywhere kills "works locally, breaks in prod." Retires the old
-  EMQX-prod / NanoMQ-local split. *(Swap from the current NanoMQ is pending — see
+  EMQX-prod / NanoMQ-local split. *(See
   docs/deployment-and-strategy.md §2.)*
 
 ### Why Drizzle ORM? (ADR-001)

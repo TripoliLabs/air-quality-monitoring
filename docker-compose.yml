@@ -2,7 +2,7 @@
 # Air Quality Monitoring — Local Development Stack
 # =============================================================================
 #
-# Full local stack: the backing services (Postgres, TimescaleDB, Redis, NanoMQ,
+# Full local stack: the backing services (Postgres, TimescaleDB, Redis, Mosquitto,
 # ChirpStack) plus the app services (api, ingestion, dashboard) built from source
 # with hot reload. Prefer running an individual app on the HOST
 # (`pnpm --filter @aq/<name> start:dev|dev`) for the fastest inner loop.
@@ -88,19 +88,18 @@ services:
       timeout: 5s
       retries: 5
 
-  # MQTT broker. NanoMQ — a lightweight (C / NNG) MQTT 5.0 broker, tiny memory
-  # footprint and well suited to edge/IoT. Production uses EMQX (same EMQ
-  # ecosystem, identical MQTT contract), so app code is unaffected.
+  # MQTT broker. Mosquitto — the battle-tested, ChirpStack-canonical reference
+  # broker. Same broker in dev + prod (prod adds a TLS listener + auth); internal
+  # glue only, never publicly exposed. See docs/deployment-and-strategy.md §2.
   mqtt:
-    image: emqx/nanomq:latest
+    image: eclipse-mosquitto:2
     container_name: airquality-mqtt
     restart: unless-stopped
     ports:
       - "1883:1883"   # MQTT (TCP)
       - "8083:8083"   # MQTT over WebSocket
-      - "8081:8081"   # HTTP REST API
     volumes:
-      - ./deploy/local/mqtt/nanomq.conf:/usr/local/nanomq/nanomq.conf:ro
+      - ./deploy/local/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
   # ===========================================================================
   # LoRaWAN network server

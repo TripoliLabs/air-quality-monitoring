@@ -347,7 +347,7 @@ when oxfmt hits stable 1.0. The frontend stays on ESLint regardless.
 
 ### Brokers
 
-- **MQTT:** **NanoMQ** locally (lightweight, in the root `docker-compose.yml`),
+- **MQTT:** **Mosquitto** (self-hosted, dev + prod; in the root `docker-compose.yml`),
   **EMQX** (serverless/managed) in production — identical MQTT contract, so app
   code is unaffected. **Redis** for pub/sub fan-out + latest-value cache.
 - Local dev brokers run from the root compose; cloud uses managed/hosted
@@ -437,7 +437,7 @@ fill-in / rewrite targets.
 | ADR-003 | pnpm to install + Node LTS runtime (Bun optional for tests) | Adopted |
 | ADR-004 | Lint split: Biome (backend) / ESLint+Prettier+eslint-plugin-vue (frontend) | Adopted |
 | — | pnpm + Turborepo monorepo, domain/deployable layout | Adopted |
-| — | NanoMQ broker locally, EMQX in production | Adopted |
+| — | Mosquitto broker, self-hosted dev + prod | Adopted |
 | — | Firmware kept in-repo, isolated, contract via telemetry-codec | Adopted |
 | — | Modular monolith per service; no premature microservices | Adopted |
 

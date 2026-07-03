@@ -1,6 +1,6 @@
 # EU868 region configuration. The key part for our local setup is the gateway
 # backend MQTT, which connects ChirpStack to the chirpstack-gateway-bridge over
-# the same broker the rest of the stack uses (NanoMQ, service `mqtt`).
+# the same broker the rest of the stack uses (Mosquitto, service `mqtt`).
 [[regions]]
   id="eu868"
   description="EU868"

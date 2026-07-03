@@ -138,7 +138,7 @@ cp .env .env.local    # adjust local config if needed (defaults work out of the 
 ### Run the stack
 
 ```bash
-# Full local stack in Docker (Postgres, TimescaleDB, Redis, NanoMQ, ChirpStack, api, ingestion, dashboard):
+# Full local stack in Docker (Postgres, TimescaleDB, Redis, Mosquitto, ChirpStack, api, ingestion, dashboard):
 docker compose up -d
 docker compose --profile observability up -d   # + Grafana / Prometheus / Loki
 

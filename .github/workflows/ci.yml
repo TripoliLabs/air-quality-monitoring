@@ -47,7 +47,7 @@ jobs:
         run: make -C firmware test
 
   # Slim integration: the API + ingestion services against their real backing
-  # stores (Postgres, TimescaleDB, Redis, NanoMQ). `up api ingestion` pulls in
+  # stores (Postgres, TimescaleDB, Redis, Mosquitto). `up api ingestion` pulls in
   # only those via depends_on — NOT the heavy/flaky ChirpStack + simulator +
   # dashboard. The full-stack e2e smoke (scripts/e2e-smoke.sh) and the ESP32
   # cross-compile (scripts/firmware-esp32-build.sh) are run locally; see CLAUDE.md.
