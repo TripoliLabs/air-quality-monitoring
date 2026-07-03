@@ -15,8 +15,8 @@
 5. **No on-prem broker / no on-prem ChirpStack for now.** Whole pipeline runs cloud-side. Revisit only if measured backhaul-outage data loss proves material.
 6. **Observability: Grafana Alloy → Grafana Cloud (free tier).** The right call, and **implemented** — services push OTLP to Alloy, which forwards to Grafana Cloud (`deploy/observability/alloy/config.cloud.alloy`; secrets tracked in issue #43). Do *not* run the LGTM stack in prod; keep the local `observability` compose profile for dev.
 7. **Firmware config changes: via LoRaWAN downlinks.** Design a downlink command schema so most remote changes never need a reflash.
-8. **OTA: deferred.** USB reflash is fine for Phase 1. But set up OTA-capable partitions now so we're not stuck later.
-9. **Payload evolution:** use the reserved **byte 12** as a version/sensor-bitmask, and move toward **single-source codec generation** (C + TS from one spec) before the sensor set grows.
+8. **OTA: deferred.** USB reflash is fine for Phase 1. OTA-capable partitions are now in place (`firmware/partitions.csv`) so we're not stuck later.
+9. **Payload evolution:** **byte 12 is now a payload-version + sensor-presence bitmask** (implemented in C + TS, decoder branches on version). Still to do: **single-source codec generation** (C + TS from one spec) before the sensor set grows.
 10. **Staging = a second Hetzner box**, identical stack, with the **`simulator` container** as its data source. Prod is the same box shape but fed by **real hardware** (ESP32 + LoRaWAN gateway); nothing else differs → true prod parity.
 11. **Backups are non-negotiable and off-box.** Automated DB backups (pgBackRest/WAL-G → object storage or a Hetzner Storage Box) from day one. The readings dataset *is* the product — a dead box must not lose it. This matters more than the LoRaWAN-outage gap in §3.
 12. **Secrets reach the box via GitHub Environment secrets, injected by the deploy workflow** — zero secret material in git (public repo) or in Terraform state; SOPS+age is the documented fallback. See §6.
@@ -111,7 +111,7 @@ Funding note: apply for **DO Open Source credits** (OSI license ✓, but small �
 - **Metric cardinality vs the ~10k-series cap.** The `http_server_duration` histogram is `route × method × status × le-bucket × service` — that multiplies fast. Watch it; drop high-cardinality labels or the histogram if it balloons.
 - **Log volume vs the 50 GB/mo cap.** Alloy currently tails **every** container (incl. chatty ChirpStack/simulator). Before pointing at Cloud, filter to the app services' logs and/or raise log levels.
 
-**Add alerting — it's the point.** For unattended field nodes, define a few Grafana Cloud alerts: *no readings for N minutes*, *ingestion stalled*, *disk > 80%*, *node battery low*, *TLS cert expiring*. Signals with no alerts don't protect anything.
+**Alerting — started.** Two provisioned Grafana rules ship today (`deploy/observability/provisioning/alerting/`): *ingestion stalled (no readings)* and *API 5xx errors*, on the metrics we already emit. Still to add (need extra metrics + a contact point): *node battery low* (a battery gauge), *disk > 80%* (node_exporter), *TLS cert expiring*, and a Slack/email contact point per environment. Signals with no alerts don't protect anything.
 
 **Implementation pointers:**
 - Add the Alloy service/config to the prod/staging compose (already in the local compose behind the profile); creds via env, never committed.
@@ -140,12 +140,10 @@ Every new measurement touches this chain (example: CO₂):
 
 **Main friction:** the C encoder (`aq_payload.c`) and TS decoder (`index.ts`) are kept byte-identical *by hand*. Drift risk is real.
 
-### 5b. Payload evolution (do this before the sensor set grows)
+### 5b. Payload evolution
 
-- **Byte 12 is `reserved/flags`, currently always `0`.** Repurpose it as a **payload-version byte and/or sensor-presence bitmask**. This unlocks:
-  - graceful mixed-firmware rollouts (decoder branches on version),
-  - **heterogeneous fleets** (not every node carries every sensor) — the current fixed layout can't express this without zero-padding.
-- **Move to single-source codec generation:** generate both the C and TS codecs from one spec (byte layout defined once), so a new sensor is *one* edit instead of two-kept-in-sync. This is the highest-leverage structural fix for the "possibilities are endless" goal.
+- **✅ Byte 12 is now a version + sensor-presence bitmask** (was always `0`): low nibble = payload version, high nibble = which sensors are populated. Implemented in both C (`firmware/core/aq_payload.c`) and TS (`packages/telemetry-codec`); the decoder branches on version (v0 legacy = all-present, v1 = explicit, v2+ rejected). This unlocks graceful mixed-firmware rollouts and **heterogeneous fleets** (not every node carries every sensor).
+- **⏳ Still to do — single-source codec generation:** generate both the C and TS codecs from one spec (byte layout defined once), so a new sensor is *one* edit instead of two-kept-in-sync. The C and TS codecs are still hand-mirrored — the highest-leverage structural fix before the sensor set grows.
 
 ### 5c. Feasibility limits are physics, not code
 
@@ -156,16 +154,15 @@ Adding scalar sensors (CO₂ SCD41, VOC/gas SGP40 or BME680, NO₂/O₃ electroc
 
 So: a handful of extra measurements per node is practical; an open-ended per-node sensor zoo is not. Design payloads around the airtime/power budget.
 
-### 5d. Config changes via LoRaWAN downlinks (build this)
+### 5d. Config changes via LoRaWAN downlinks (✅ built)
 
-You **cannot** push firmware over LoRa practically, but you **can** push small **downlink commands**. Design a downlink command schema so remote changes don't need a reflash:
-- sample interval, calibration offsets, alert thresholds, enable/disable a behavior.
-- This is the pragmatic "change stuff remotely" answer and decouples config from firmware.
+You **cannot** push firmware over LoRa practically, but you **can** push small **downlink commands** — implemented. A command schema (`[opcode][args]` on fPort 10: `setInterval` / `setPmOffset` / `setTempOffset`) lives in both C (`firmware/core/aq_downlink.{c,h}`, host-tested) and TS (`packages/telemetry-codec`), plus a ChirpStack enqueue helper. The simulator receives + decrypts + decodes downlinks end-to-end (verified). Extend the command set as needed.
+- **Last mile (hardware):** wire `aq_downlink_apply()` into the on-chip LoRaWAN RX callback so a real node applies the config (the parser is done + host-tested; the on-target hook isn't).
 - **Timing caveat:** Class A nodes only open an RX window *right after an uplink*, so a queued downlink lands up to one sample-interval later (and is gateway-duty-cycle limited). Fine for occasional config; don't expect instant.
 
 ### 5e. OTA: deferred, but prepare the ground now
 
-**Current state:** no OTA. Deployment = physical USB flash (`pio run -t upload`). Also `platformio.ini` references `board_build.partitions = partitions.csv` **but that file doesn't exist** (verified) — so this **breaks `pio run` today**. Creating it isn't just future-proofing; it's a current fix. OTA also requires a dual-app partition layout anyway.
+**Current state:** no OTA. Deployment = physical USB flash (`pio run -t upload`). The `partitions.csv` that `platformio.ini` references (and which was missing, breaking `pio run`) is now **created** with a dual-app OTA layout (`factory` + `ota_0`/`ota_1` + `otadata`) — unused today but ready for OTA later.
 
 **Why OTA is hard here:**
 - **FUOTA** (LoRaWAN fragmented multicast update) is complex, very slow (duty-cycle throttled), power-hungry, impractical for full ESP32 images. Skip unless it becomes a hard requirement.
@@ -175,9 +172,9 @@ You **cannot** push firmware over LoRa practically, but you **can** push small *
 
 **Plan:**
 1. Phase 1 (≤10 nodes): USB reflash is fine. Stabilize firmware.
-2. **Build the downlink config channel** (§5d) — highest leverage.
-3. **Create the missing `partitions.csv`** with an OTA-capable layout (`factory` + `ota_0`/`ota_1` + `otadata`) now, even if unused — unlocks **BLE OTA** later (technician pushes firmware from a phone/laptop next to the node).
-4. Use the **byte-12 version byte** (§5b) for safe rollouts.
+2. ✅ **Downlink config channel** (§5d) — built (schema + round-trip); remaining: the on-target RX hook.
+3. ✅ **`partitions.csv`** — created with an OTA-capable layout; unlocks **BLE OTA** later (technician pushes firmware from a phone/laptop next to the node).
+4. ✅ **Byte-12 version byte** (§5b) — implemented for safe rollouts.
 5. Skip FUOTA.
 
 ---
@@ -219,12 +216,13 @@ Mechanism:
 
 ## Suggested implementation order (for the next session)
 
+**Still open (yours / hardware):**
 1. **`infra/`** — one OpenTofu Hetzner module (CX42 + block volume + firewall + cloud-init running `docker-compose.yml`), instantiated for `staging` (with the simulator) and `prod` (real hardware); verify `hcloud` access.
-2. **Backups + secrets delivery (§6)** — pgBackRest/WAL-G off-box **with a tested restore**, plus a secrets mechanism (SOPS+age or cloud-init env). Do this *with* infra, not after — the box shouldn't run unbacked.
-3. **Broker swap** — Mosquitto in `mqtt/` + compose (local + prod), update `architecture.md`.
-4. **Observability wiring** — mount `config.cloud.alloy` + `GRAFANA_CLOUD_*` in the deployment (collector, configs, dashboards are already built); add the first few alerts (§4).
-5. **Firmware `partitions.csv`** — create the missing OTA-capable layout (also fixes `pio run` today).
-6. **Downlink config schema** — command handling in firmware + a way to enqueue downlinks via ChirpStack.
-7. **Payload versioning** — start using byte 12; plan the single-source C+TS codec generator before adding the next sensor.
+2. **Backups + secrets delivery (§6)** — pgBackRest/WAL-G off-box **with a tested restore**, plus the deploy workflow that renders `app.env` from GitHub Environment secrets. Do this *with* infra, not after — the box shouldn't run unbacked.
+3. **Observability → Cloud** — mount `config.cloud.alloy` + `GRAFANA_CLOUD_*` in the deployment; add a contact point + battery/disk metrics for the remaining alerts (§4).
+4. **On-target firmware** — cross-compile + flash a real T-Beam; validate drivers/AXP192/RadioLib/OTAA join; wire `aq_downlink_apply()` into the LoRaWAN RX callback.
+5. **Single-source codec generation** (§5b) — replace the hand-mirrored C/TS codecs before the next sensor.
 
-> When each of these lands, promote the decision to a formal ADR in `architecture.md`.
+**Done since this doc was written:** ✅ Mosquitto broker swap · ✅ Alloy collector + dashboards + log-scoping + first alerts · ✅ `partitions.csv` · ✅ downlink config channel · ✅ byte-12 payload versioning · ✅ simulator idempotent re-provisioning.
+
+> When each open item lands, promote the decision to a formal ADR in `architecture.md`.

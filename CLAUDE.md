@@ -115,7 +115,7 @@ air-quality-monitoring/
 │   ├── telemetry-codec/   # @aq/telemetry-codec — LoRa payload spec + decoder
 │   └── observability/     # @aq/observability — logger / OTel init
 ├── firmware/              # ESP32 firmware (ports & adapters)
-│   ├── core/              #   portable C: sensor HAL + payload codec (host- & target-buildable)
+│   ├── core/              #   portable C: sensor HAL + payload codec + downlink config (host- & target-buildable)
 │   ├── sim/               #   host adapter: simulated PMS7003/BME280 + entrypoint (used by the simulator)
 │   ├── adapters/esp32/    #   on-target drivers (PMS7003/BME280/LoRa)
 │   ├── test/              #   host unit tests (make test)

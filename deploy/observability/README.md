@@ -25,12 +25,13 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318 docker compose --profile observabi
 ```
 
 - **Grafana** → http://localhost:3002 (`admin` / `admin`) — datasources
-  (Prometheus/Tempo/Loki) and the **Air Quality — Services** dashboard are
-  auto-provisioned. Traces and logs are explorable via Grafana → Explore.
+  (Prometheus/Tempo/Loki), the **Air Quality — Services** dashboard, and the
+  alert rules (*ingestion stalled*, *API 5xx*) are auto-provisioned. Traces and
+  logs are explorable via Grafana → Explore.
 - **Alloy UI** → http://localhost:12345 · **Prometheus** → http://localhost:9090
 
 Files: `alloy/config.alloy` (local collector), `prometheus.yml`, `tempo.yml`,
-`provisioning/` (Grafana datasources + dashboards).
+`provisioning/` (Grafana datasources + dashboards + alerting).
 
 ## Grafana Cloud (staging / prod)
 
