@@ -13,5 +13,6 @@ void aq_payload_encode(const aq_reading_t *r, uint8_t out[AQ_PAYLOAD_LEN]) {
     put_u16(&out[6], (uint16_t)lroundf(r->humidity * 100.0f));
     put_u16(&out[8], (uint16_t)lroundf(r->pressure));
     put_u16(&out[10], r->battery_mv);
-    out[12] = 0; /* reserved/flags */
+    /* This firmware carries both a PM and an environmental sensor. */
+    out[12] = AQ_PAYLOAD_VERSION | AQ_PRESENT_PM | AQ_PRESENT_ENV;
 }

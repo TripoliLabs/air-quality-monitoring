@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { decodeUplink, encodeUplink, PAYLOAD_LENGTH, type DecodedPayload } from '../src/index';
+import {
+  decodeDownlink,
+  decodeUplink,
+  type DecodedPayload,
+  type DownlinkCommand,
+  encodeDownlink,
+  encodeUplink,
+  PAYLOAD_LENGTH,
+  PAYLOAD_VERSION,
+  PRESENT_ENV,
+  PRESENT_PM,
+} from '../src/index';
 
 const sample: DecodedPayload = {
   pm25: 42.3,
@@ -43,5 +54,61 @@ describe('telemetry codec', () => {
     bytes[0] = 0x64;
     bytes[1] = 0x00;
     expect(decodeUplink(bytes).pm25).toBe(10);
+  });
+
+  it('encodes byte 12 as version + PM|ENV presence', () => {
+    const bytes = encodeUplink(sample);
+    expect(bytes[12]).toBe(PAYLOAD_VERSION | PRESENT_PM | PRESENT_ENV);
+  });
+
+  it('decodes the version and sensor-presence bitmask', () => {
+    const decoded = decodeUplink(encodeUplink(sample));
+    expect(decoded.version).toBe(PAYLOAD_VERSION);
+    expect(decoded.sensorsPresent).toEqual({ pm: true, env: true });
+  });
+
+  it('treats legacy version 0 (byte 12 = 0) as all sensors present', () => {
+    const bytes = new Uint8Array(PAYLOAD_LENGTH); // byte 12 == 0
+    const decoded = decodeUplink(bytes);
+    expect(decoded.version).toBe(0);
+    expect(decoded.sensorsPresent).toEqual({ pm: true, env: true });
+  });
+
+  it('reports a sensor as absent when its presence bit is clear', () => {
+    const bytes = encodeUplink(sample);
+    bytes[12] = PAYLOAD_VERSION | PRESENT_ENV; // PM bit cleared
+    const decoded = decodeUplink(bytes);
+    expect(decoded.sensorsPresent).toEqual({ pm: false, env: true });
+  });
+
+  it('throws on an unsupported (future) payload version', () => {
+    const bytes = encodeUplink(sample);
+    bytes[12] = PAYLOAD_VERSION + 1; // version 2, unknown to this decoder
+    expect(() => decodeUplink(bytes)).toThrow(/unsupported payload version/i);
+  });
+});
+
+describe('downlink config codec', () => {
+  const cases: DownlinkCommand[] = [
+    { command: 'setInterval', seconds: 600 },
+    { command: 'setPmOffset', offsetX10: -35 },
+    { command: 'setTempOffset', offsetX100: 250 },
+  ];
+
+  it.each(cases)('round-trips %o', (cmd) => {
+    expect(decodeDownlink(encodeDownlink(cmd))).toEqual(cmd);
+  });
+
+  it('encodes a known set-interval command', () => {
+    const bytes = encodeDownlink({ command: 'setInterval', seconds: 600 });
+    expect([...bytes]).toEqual([0x01, 0x58, 0x02]); // 600 = 0x0258 LE
+  });
+
+  it('throws on an unknown opcode', () => {
+    expect(() => decodeDownlink(new Uint8Array([0x7f, 0, 0]))).toThrow(/unknown downlink/i);
+  });
+
+  it('throws on a short downlink', () => {
+    expect(() => decodeDownlink(new Uint8Array([0x01]))).toThrow(/too short/i);
   });
 });

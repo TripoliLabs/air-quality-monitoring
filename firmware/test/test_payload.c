@@ -13,7 +13,9 @@ static void test_known_encoding(void) {
     TEST_ASSERT_EQUAL_UINT(0x64, buf[0]);
     TEST_ASSERT_EQUAL_UINT(0x00, buf[1]);
     TEST_ASSERT_EQUAL_UINT(13, AQ_PAYLOAD_LEN);
-    TEST_ASSERT_EQUAL_UINT(0, buf[12]); /* reserved */
+    /* byte 12: version (low nibble) + PM|ENV presence (high nibble). */
+    TEST_ASSERT_EQUAL_UINT(AQ_PAYLOAD_VERSION | AQ_PRESENT_PM | AQ_PRESENT_ENV, buf[12]);
+    TEST_ASSERT_EQUAL_UINT(AQ_PAYLOAD_VERSION, buf[12] & 0x0f);
 }
 
 static void test_full_reading_fields(void) {
