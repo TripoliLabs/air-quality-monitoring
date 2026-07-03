@@ -18,6 +18,7 @@ declare module 'lora-packet' {
     fCntMSB?: Buffer,
   ): void;
   export function decryptJoinAccept(packet: LoraPacket, appKey: Buffer): Buffer;
+  export function decrypt(packet: LoraPacket, appSKey: Buffer, nwkSKey?: Buffer): Buffer;
   export function generateSessionKeys10(
     appKey: Buffer,
     netId: Buffer,

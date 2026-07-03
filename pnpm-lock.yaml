@@ -353,6 +353,9 @@ importers:
       '@aq/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@aq/telemetry-codec':
+        specifier: workspace:*
+        version: link:../../packages/telemetry-codec
       '@chirpstack/chirpstack-api':
         specifier: ^4.0.0
         version: 4.18.0

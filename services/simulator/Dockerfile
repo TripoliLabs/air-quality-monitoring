@@ -13,7 +13,7 @@ FROM base AS deps
 RUN apk add --no-cache build-base # gcc + make for the firmware host build
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @aq/db build
+RUN pnpm --filter "./packages/*" build # shared deps (@aq/db, @aq/telemetry-codec, …)
 RUN pnpm --filter @aq/simulator build
 RUN make -C firmware host && make -C firmware test # build the node firmware + run its unit tests
 

@@ -17,14 +17,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { SENSOR_FIXTURES } from '@aq/db';
-import { provision } from './chirpstack';
+import { DOWNLINK_FPORT, decodeDownlink, encodeDownlink } from '@aq/telemetry-codec';
+import { enqueueDownlink, provision } from './chirpstack';
 import { SemtechGateway } from './gateway';
 import {
   buildJoinRequest,
   buildUplink,
   type DeviceCredentials,
   type DeviceSession,
+  decryptDownlink,
   deriveSession,
+  downlinkDevAddr,
+  downlinkFPort,
   newDevNonce,
 } from './lorawan';
 
@@ -146,6 +150,25 @@ async function main(): Promise<void> {
   const baseline = new Map(SENSOR_FIXTURES.map((f) => [f.deviceId, f.baselinePm25]));
   const fCnt = new Map(sessions.map((s) => [s.devEui, 0]));
 
+  // Receive config downlinks the device would apply on-node (decrypt → decode).
+  gateway.onDataDownlink((phy) => {
+    const session = sessions.find((s) => s.devAddr === downlinkDevAddr(phy));
+    if (!session) return;
+    // Only our application config downlinks; ignore MAC-only downlinks (ADR, etc.).
+    if (downlinkFPort(phy) !== DOWNLINK_FPORT) return;
+    try {
+      const cmd = decodeDownlink(new Uint8Array(decryptDownlink(session, phy)));
+      log({
+        level: 'info',
+        msg: 'config downlink received + applied',
+        devEui: session.devEui,
+        cmd,
+      });
+    } catch (err) {
+      log({ level: 'warn', msg: 'config downlink decode failed', error: String(err) });
+    }
+  });
+
   async function tick(): Promise<void> {
     const hour = new Date().getHours() + new Date().getMinutes() / 60;
     let sent = 0;
@@ -166,6 +189,23 @@ async function main(): Promise<void> {
   }
 
   await tick();
+
+  // One-time demo of the downlink config channel: retune the first device's
+  // sample interval. ChirpStack delivers it in the RX window after that device's
+  // next uplink; the onDataDownlink handler above decodes + logs it applied.
+  try {
+    const cmd = { command: 'setInterval', seconds: 600 } as const;
+    await enqueueDownlink(
+      { grpcAddr: GRPC_ADDR, restBase: REST_BASE, user: USER, pass: PASS },
+      sessions[0].devEui,
+      DOWNLINK_FPORT,
+      encodeDownlink(cmd),
+    );
+    log({ level: 'info', msg: 'enqueued config downlink', devEui: sessions[0].devEui, cmd });
+  } catch (err) {
+    log({ level: 'warn', msg: 'enqueue downlink failed', error: String(err) });
+  }
+
   setInterval(() => void tick(), INTERVAL_MS);
 
   const shutdown = (): void => {

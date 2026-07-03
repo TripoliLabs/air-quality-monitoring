@@ -14,10 +14,15 @@ $(BUILD)/aq-node-sim: $(CORE) sim/sensors_sim.c sim/main.c
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
-test: $(BUILD)/test_payload ## build + run the host unit tests
+test: $(BUILD)/test_payload $(BUILD)/test_downlink ## build + run the host unit tests
 	./$(BUILD)/test_payload
+	./$(BUILD)/test_downlink
 
 $(BUILD)/test_payload: core/aq_payload.c test/test_payload.c
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $^ -lm -o $@
+
+$(BUILD)/test_downlink: core/aq_downlink.c test/test_downlink.c
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 

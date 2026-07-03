@@ -147,3 +147,16 @@ export async function provision(opts: ProvisionOptions): Promise<Provisioned> {
 
   return { applicationId, gatewayEui: opts.gatewayEui, devices };
 }
+
+/** Queue a downlink (e.g. a config command) for a device via ChirpStack. */
+export async function enqueueDownlink(
+  opts: Pick<ProvisionOptions, 'grpcAddr' | 'restBase' | 'user' | 'pass'>,
+  devEui: string,
+  fPort: number,
+  data: Uint8Array,
+): Promise<void> {
+  const jwt = await login(opts.grpcAddr, opts.user, opts.pass);
+  await rest(opts.restBase, jwt, 'POST', `/api/devices/${devEui}/queue`, {
+    queueItem: { devEui, fPort, confirmed: false, data: Buffer.from(data).toString('base64') },
+  });
+}

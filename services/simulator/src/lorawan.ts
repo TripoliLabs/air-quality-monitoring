@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import {
+  decrypt,
   decryptJoinAccept,
   fromFields,
   fromWire,
@@ -69,6 +70,23 @@ export function deriveSession(
  * device MAC encrypts the FRMPayload with AppSKey and computes the MIC with
  * NwkSKey. Returns the raw PHYPayload bytes.
  */
+/** The DevAddr (hex) a downlink PHYPayload is addressed to. */
+export function downlinkDevAddr(phy: Buffer): string {
+  return fromWire(phy).getBuffers().DevAddr.toString('hex');
+}
+
+/** The FPort of a downlink, or undefined for a MAC-only frame (no app payload). */
+export function downlinkFPort(phy: Buffer): number | undefined {
+  const fport = fromWire(phy).getBuffers().FPort;
+  return fport && fport.length > 0 ? fport[0] : undefined;
+}
+
+/** Decrypt a downlink data frame's FRMPayload with the device's session keys. */
+export function decryptDownlink(session: DeviceSession, phy: Buffer): Buffer {
+  const packet = fromWire(phy);
+  return decrypt(packet, Buffer.from(session.appSKey, 'hex'), Buffer.from(session.nwkSKey, 'hex'));
+}
+
 export function buildUplink(session: DeviceSession, fCnt: number, frmPayload: Buffer): Buffer {
   const packet = fromFields(
     {

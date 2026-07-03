@@ -19,6 +19,7 @@ export class SemtechGateway {
   private readonly euiBytes: Buffer;
   private pullTimer?: ReturnType<typeof setInterval>;
   private downlinkWaiters: Array<(phy: Buffer) => void> = [];
+  private dataDownlinkHandler?: (phy: Buffer) => void;
 
   constructor(
     private readonly host: string,
@@ -76,6 +77,11 @@ export class SemtechGateway {
     this.sock.send(datagram, this.port, this.host);
   }
 
+  /** Handle downlinks that arrive outside a join (e.g. config data downlinks). */
+  onDataDownlink(cb: (phy: Buffer) => void): void {
+    this.dataDownlinkHandler = cb;
+  }
+
   /** Resolve with the next downlink PHYPayload (e.g. a Join Accept). */
   waitForDownlink(timeoutMs: number): Promise<Buffer> {
     return new Promise((resolve, reject) => {
@@ -99,7 +105,11 @@ export class SemtechGateway {
         const data = json.txpk?.data;
         if (data) {
           const phy = Buffer.from(data, 'base64');
-          this.downlinkWaiters.shift()?.(phy);
+          // A pending waiter means we're mid-join (Join Accept); otherwise it's
+          // an application downlink (e.g. a config command) during streaming.
+          const waiter = this.downlinkWaiters.shift();
+          if (waiter) waiter(phy);
+          else this.dataDownlinkHandler?.(phy);
         }
       } catch {
         // ignore malformed PULL_RESP
