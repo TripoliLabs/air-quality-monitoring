@@ -8,7 +8,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-/** Relational app data — lives on DigitalOcean Managed Postgres. */
+/** Relational app data — lives on self-hosted PostgreSQL (see deployment-and-strategy.md). */
 
 export const sensors = pgTable('sensors', {
   id: uuid('id').primaryKey().defaultRandom(),

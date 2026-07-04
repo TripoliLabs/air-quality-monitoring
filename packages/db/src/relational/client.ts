@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import * as schema from './schema';
 
 /**
- * Relational DB client (DigitalOcean Managed Postgres). postgres.js connects
+ * Relational DB client (self-hosted PostgreSQL). postgres.js connects
  * lazily, so creating the client does not require the DB to be reachable.
  */
 export function createRelationalDb(connectionString: string) {

@@ -8,7 +8,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 /**
- * Time-series telemetry — lives on TigerData (managed TimescaleDB).
+ * Time-series telemetry — lives on self-hosted TimescaleDB (full TSL edition).
  *
  * `readings` is converted into a hypertable via a `--custom` SQL migration
  * (`SELECT create_hypertable('readings', 'time')`). TimescaleDB requires the
