@@ -196,6 +196,18 @@ function createMarkerElement(color: string): HTMLDivElement {
   return outer;
 }
 
+// Escape server-supplied strings before they go into popup.setHTML (XSS sink).
+function escapeHtml(s: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return s.replace(/[&<>"']/g, (c) => map[c] ?? c);
+}
+
 function getSensorName(sensor: SensorTimeSeries): string {
   return locale.value === 'ar' ? sensor.definition.nameAr : sensor.definition.name;
 }
@@ -246,9 +258,9 @@ function updateMarkers(): void {
           .setLngLat([longitude, latitude])
           .setHTML(
             `<div style="font-size:13px">
-              <strong>${name}</strong>
-              <span style="color:#9ca3af;font-size:11px"> ${neighborhood}</span><br/>
-              <span><b>${metric}</b></span>
+              <strong>${escapeHtml(name)}</strong>
+              <span style="color:#9ca3af;font-size:11px"> ${escapeHtml(neighborhood)}</span><br/>
+              <span><b>${escapeHtml(metric)}</b></span>
             </div>`,
           )
           .addTo(map!);

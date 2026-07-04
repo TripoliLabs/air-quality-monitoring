@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import { getAqiColor, getAqiLabel } from '@composables/useAqi';
 import { useSensorsStore } from '@stores/sensors';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 
 const route = useRoute();
 const { t, locale } = useI18n();
 const sensorsStore = useSensorsStore();
+
+// Keep the document direction in sync with the locale from ANY toggle (app shell
+// or landing page), and on first load — not just the app-shell handler below.
+watch(
+  locale,
+  (l) => {
+    document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+  },
+  { immediate: true },
+);
 
 const GITHUB_REPO = 'TripoliLabs/air-quality-monitoring';
 const starCount = ref<number | null>(null);
@@ -42,8 +52,8 @@ const isFullScreenRoute = computed(() => {
 });
 
 function toggleLocale(): void {
+  // The locale watcher above updates document.dir.
   locale.value = locale.value === 'en' ? 'ar' : 'en';
-  document.documentElement.dir = locale.value === 'ar' ? 'rtl' : 'ltr';
 }
 
 function formatStarCount(count: number): string {
