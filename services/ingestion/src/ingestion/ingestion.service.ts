@@ -16,6 +16,9 @@ const UPLINK_TOPIC = 'application/+/device/+/event/up';
 const READINGS_CHANNEL = 'readings'; // Redis Pub/Sub channel for realtime fan-out
 const LATEST_KEY = (deviceId: string): string => `sensor:latest:${deviceId}`;
 const DATA_FPORT = 2; // telemetry uplinks (config downlinks use fPort 10)
+// Latest-value cache TTL: refreshed every uplink (~5 min) while a sensor is alive;
+// a dead sensor's stale "latest" then expires instead of lingering forever.
+const LATEST_TTL_SECONDS = 7200; // 2h
 
 @Injectable()
 export class IngestionService implements OnModuleInit, OnModuleDestroy {
@@ -43,17 +46,21 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     const url = this.config.get<string>('MQTT_URL', 'mqtt://localhost:1883');
-    this.log.info('connecting to MQTT broker', { url });
-    // Persistent session (clean:false + stable clientId) + QoS 1 so uplinks
-    // published while ingestion is restarting are queued, not lost.
-    // NOTE: the fixed clientId assumes a SINGLE ingestion instance — a second
-    // replica would take over this session. Move to a shared subscription
-    // ($share/aq/application/…) before scaling ingestion horizontally.
-    this.client = connect(url, { clientId: 'aq-ingestion', clean: false });
+    const clientId = this.config.get<string>('MQTT_CLIENT_ID', 'aq-ingestion');
+    const shareGroup = this.config.get<string>('MQTT_SHARED_GROUP', '');
+    // clean:false + a STABLE per-instance clientId keeps a persistent session, so
+    // uplinks published while THIS instance restarts are queued (QoS 1), not lost.
+    // To scale horizontally, set MQTT_SHARED_GROUP (and a unique MQTT_CLIENT_ID per
+    // replica): a $share/ subscription load-balances uplinks across the group.
+    // Shared subs only distribute among ONLINE members, so single-instance stays on
+    // the plain topic to keep the queue-on-restart guarantee.
+    const topic = shareGroup ? `$share/${shareGroup}/${UPLINK_TOPIC}` : UPLINK_TOPIC;
+    this.log.info('connecting to MQTT broker', { url, clientId, topic });
+    this.client = connect(url, { clientId, clean: false });
     this.client.on('connect', () => {
-      this.client?.subscribe(UPLINK_TOPIC, { qos: 1 }, (err) => {
+      this.client?.subscribe(topic, { qos: 1 }, (err) => {
         if (err) this.log.error('subscribe failed', { error: String(err) });
-        else this.log.info('subscribed', { topic: UPLINK_TOPIC });
+        else this.log.info('subscribed', { topic });
       });
     });
     // Without an 'error' listener, mqtt.js re-emits broker errors as an unhandled
@@ -119,20 +126,24 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
         signalStrength: rssi !== undefined ? Math.round(rssi) : undefined,
       });
 
-      // 4) Persist to TimescaleDB.
-      await this.db.insert(readings).values({
-        time: new Date(reading.timestamp),
-        sensorId: reading.deviceId,
-        pm25: reading.pm25,
-        pm10: reading.pm10,
-        temperature: reading.temperature,
-        humidity: reading.humidity,
-        pressure: reading.pressure,
-        aqi: aqi.aqi,
-        aqiCategory: aqi.category,
-        batteryMv: reading.batteryMv,
-        signalStrength: reading.signalStrength,
-      });
+      // 4) Persist to TimescaleDB. A re-delivered uplink (same sensor_id + time)
+      //    is a harmless no-op rather than a thrown duplicate-key error.
+      await this.db
+        .insert(readings)
+        .values({
+          time: new Date(reading.timestamp),
+          sensorId: reading.deviceId,
+          pm25: reading.pm25,
+          pm10: reading.pm10,
+          temperature: reading.temperature,
+          humidity: reading.humidity,
+          pressure: reading.pressure,
+          aqi: aqi.aqi,
+          aqiCategory: aqi.category,
+          batteryMv: reading.batteryMv,
+          signalStrength: reading.signalStrength,
+        })
+        .onConflictDoNothing();
 
       // 5) Update the latest-value cache and broadcast on Pub/Sub.
       const event: ReadingCreatedEvent = {
@@ -145,7 +156,12 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
           aqiCategory: aqi.category,
         },
       };
-      await this.redis.set(LATEST_KEY(deviceId), JSON.stringify(event.payload));
+      await this.redis.set(
+        LATEST_KEY(deviceId),
+        JSON.stringify(event.payload),
+        'EX',
+        LATEST_TTL_SECONDS,
+      );
       await this.redis.publish(READINGS_CHANNEL, JSON.stringify(event));
 
       this.readingsIngested.add(1, { category: aqi.category });
@@ -162,6 +178,7 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
     const user = this.config.get<string>('TSDB_USERNAME', 'airquality');
     const pass = this.config.get<string>('TSDB_PASSWORD', 'airquality');
     const name = this.config.get<string>('TSDB_NAME', 'telemetry');
-    return `postgres://${user}:${pass}@${host}:${port}/${name}`;
+    // Encode credentials so a password with URL-reserved chars (@ : / #) is safe.
+    return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${name}`;
   }
 }
