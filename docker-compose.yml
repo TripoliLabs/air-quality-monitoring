@@ -56,7 +56,7 @@ services:
   # readings ONLY: hypertables, continuous aggregates, compression + retention.
   # The timescaledb extension is auto-created in POSTGRES_DB by this image.
   timescaledb:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:2.25.0-pg16 # pinned — a floating tag breaks on a random pull
     container_name: airquality-timescaledb
     restart: unless-stopped
     environment:

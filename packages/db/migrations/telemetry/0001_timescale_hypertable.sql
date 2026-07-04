@@ -8,7 +8,10 @@ SELECT create_hypertable('readings', by_range('time', INTERVAL '7 days'));
 
 -- 2) Continuous aggregate: hourly per-sensor rollup for fast dashboard queries.
 CREATE MATERIALIZED VIEW readings_hourly
-WITH (timescaledb.continuous) AS
+-- materialized_only = false → real-time aggregation, so the newest (not-yet-
+-- materialized) hour still shows in queries. The default flipped to true in
+-- Timescale 2.13, so we set it explicitly.
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
     sensor_id,
     time_bucket(INTERVAL '1 hour', "time") AS bucket,
