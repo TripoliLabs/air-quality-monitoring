@@ -15,6 +15,7 @@ import { connect, type MqttClient } from 'mqtt';
 const UPLINK_TOPIC = 'application/+/device/+/event/up';
 const READINGS_CHANNEL = 'readings'; // Redis Pub/Sub channel for realtime fan-out
 const LATEST_KEY = (deviceId: string): string => `sensor:latest:${deviceId}`;
+const DATA_FPORT = 2; // telemetry uplinks (config downlinks use fPort 10)
 
 @Injectable()
 export class IngestionService implements OnModuleInit, OnModuleDestroy {
@@ -32,19 +33,25 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
     this.redis = new Redis(this.config.get<string>('REDIS_URL', 'redis://localhost:6379'), {
       lazyConnect: false,
       maxRetriesPerRequest: null,
+      commandTimeout: 10_000, // fail a command rather than hang forever on a Redis outage
     });
   }
 
   onModuleInit(): void {
     const url = this.config.get<string>('MQTT_URL', 'mqtt://localhost:1883');
     this.log.info('connecting to MQTT broker', { url });
-    this.client = connect(url);
+    // Persistent session (clean:false + stable clientId) + QoS 1 so uplinks
+    // published while ingestion is restarting are queued, not lost.
+    this.client = connect(url, { clientId: 'aq-ingestion', clean: false });
     this.client.on('connect', () => {
-      this.client?.subscribe(UPLINK_TOPIC, (err) => {
+      this.client?.subscribe(UPLINK_TOPIC, { qos: 1 }, (err) => {
         if (err) this.log.error('subscribe failed', { error: String(err) });
         else this.log.info('subscribed', { topic: UPLINK_TOPIC });
       });
     });
+    // Without an 'error' listener, mqtt.js re-emits broker errors as an unhandled
+    // exception that crashes the process instead of using its built-in reconnect.
+    this.client.on('error', (err) => this.log.error('mqtt error', { error: String(err) }));
     this.client.on('message', (topic, payload) => {
       void this.handleUplink(topic, payload);
     });
@@ -60,6 +67,13 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       // 1) Parse + validate the ChirpStack application-uplink envelope.
       const uplink = ChirpStackUplinkSchema.parse(JSON.parse(raw.toString('utf8')));
       const deviceId = uplink.deviceInfo.devEui;
+
+      // Only telemetry uplinks (fPort 2) decode as readings — a config downlink
+      // channel now uses fPort 10, and other ports aren't our payload layout.
+      if (uplink.fPort !== DATA_FPORT) {
+        this.log.debug('ignoring non-telemetry uplink', { deviceId, fPort: uplink.fPort });
+        return;
+      }
 
       // 2) Decode the base64 frmPayload with the shared codec (same layout as firmware).
       const bytes = new Uint8Array(Buffer.from(uplink.data, 'base64'));
