@@ -573,3 +573,8 @@ firmware/build-esp32/
 firmware/sdkconfig
 firmware/sdkconfig.old
 firmware/managed_components/
+
+# Local env files — real values live here (and in GitHub Environments), never committed.
+# Tracked templates are .env.example.
+**/.env
+!**/.env.example
