@@ -13,7 +13,9 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const store = useSensorsStore();
 
-const sensorId = route.params.id as string;
+// A computed (not a one-time capture) so navigating between sensors on the same
+// route — which reuses this component without remounting — updates the view.
+const sensorId = computed(() => route.params.id as string);
 
 onMounted(() => {
   if (!store.isSimulating) {
@@ -21,11 +23,11 @@ onMounted(() => {
   }
 });
 
-const sensor = computed(() => store.getSensorById(sensorId));
+const sensor = computed(() => store.getSensorById(sensorId.value));
 const latest = computed(() => sensor.value?.latest ?? null);
 
 const sensorName = computed(() => {
-  if (!sensor.value) return sensorId;
+  if (!sensor.value) return sensorId.value;
   return locale.value === 'ar' ? sensor.value.definition.nameAr : sensor.value.definition.name;
 });
 
@@ -47,7 +49,8 @@ const sensorCenter = computed(() => {
 });
 
 function batteryPercent(mv: number): number {
-  return Math.round(((mv - 3200) / (4200 - 3200)) * 100);
+  // Clamp to 0–100 so a missing/0 mV reads as 0%, not -320%.
+  return Math.min(100, Math.max(0, Math.round(((mv - 3200) / (4200 - 3200)) * 100)));
 }
 
 function goBack(): void {

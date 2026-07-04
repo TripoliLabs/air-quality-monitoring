@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { countReadings, downloadFile, generateCSV, generateJSON } from '@composables/useDataExport';
 import { useSensorsStore } from '@stores/sensors';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const { t, locale } = useI18n();
@@ -10,34 +10,44 @@ const store = useSensorsStore();
 const fromDate = ref('');
 const toDate = ref('');
 const format = ref<'csv' | 'json'>('csv');
-const selectedSensorIds = ref<Set<string>>(new Set());
-const allSelected = ref(true);
-
-// Initialize: select all sensors
 const sensors = computed(() => store.allSensors);
 
+// The set of selected ids is the single source of truth. Default to all selected
+// once sensors load (a checked box === present in the set), so unchecking one
+// removes only that sensor instead of inverting the whole selection.
+const selectedSensorIds = ref<Set<string>>(new Set());
+let initialized = false;
+watch(
+  sensors,
+  (list) => {
+    if (!initialized && list.length > 0) {
+      selectedSensorIds.value = new Set(list.map((s) => s.definition.id));
+      initialized = true;
+    }
+  },
+  { immediate: true },
+);
+
+const allSelected = computed(
+  () => sensors.value.length > 0 && selectedSensorIds.value.size === sensors.value.length,
+);
+
 function toggleSelectAll(): void {
-  if (allSelected.value) {
-    selectedSensorIds.value = new Set(sensors.value.map((s) => s.definition.id));
-  } else {
-    selectedSensorIds.value = new Set();
-  }
+  selectedSensorIds.value = allSelected.value
+    ? new Set()
+    : new Set(sensors.value.map((s) => s.definition.id));
 }
 
 function toggleSensor(id: string): void {
-  const s = selectedSensorIds.value;
-  if (s.has(id)) {
-    s.delete(id);
-  } else {
-    s.add(id);
-  }
-  allSelected.value = s.size === sensors.value.length;
+  const s = new Set(selectedSensorIds.value); // new ref so computeds re-run
+  if (s.has(id)) s.delete(id);
+  else s.add(id);
+  selectedSensorIds.value = s;
 }
 
-const filteredSensors = computed(() => {
-  if (allSelected.value) return sensors.value;
-  return sensors.value.filter((s) => selectedSensorIds.value.has(s.definition.id));
-});
+const filteredSensors = computed(() =>
+  sensors.value.filter((s) => selectedSensorIds.value.has(s.definition.id)),
+);
 
 const parsedFrom = computed(() => (fromDate.value ? new Date(fromDate.value) : null));
 const parsedTo = computed(() =>
@@ -108,7 +118,7 @@ function doDownload(): void {
         <div class="max-h-32 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 p-2">
           <label class="mb-1 flex cursor-pointer items-center gap-2 text-sm text-gray-200">
             <input
-              v-model="allSelected"
+              :checked="allSelected"
               type="checkbox"
               class="accent-emerald-500"
               @change="toggleSelectAll"
@@ -123,7 +133,7 @@ function doDownload(): void {
             >
               <input
                 type="checkbox"
-                :checked="allSelected || selectedSensorIds.has(sensor.definition.id)"
+                :checked="selectedSensorIds.has(sensor.definition.id)"
                 class="accent-emerald-500"
                 @change="toggleSensor(sensor.definition.id)"
               />

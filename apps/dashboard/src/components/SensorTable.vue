@@ -12,7 +12,13 @@ const store = useSensorsStore();
 const router = useRouter();
 const { t, locale } = useI18n();
 
-const searchFilter = ref('');
+// PrimeVue global filter: a `filters` object with a `global` entry, paired with
+// :global-filter-fields on the DataTable (there is no `:global-filter` prop).
+// matchMode 'contains' === PrimeVue's FilterMatchMode.CONTAINS (avoid the
+// enum import, whose package path isn't exposed via @primevue/core exports).
+const filters = ref({
+  global: { value: null as string | null, matchMode: 'contains' },
+});
 
 function onRowClick(event: { data: NeighborhoodSummary }): void {
   router.push({ name: 'neighborhood', params: { id: event.data.id } });
@@ -28,7 +34,7 @@ function getName(row: NeighborhoodSummary): string {
     <div class="flex items-center justify-between">
       <h3 class="text-lg font-semibold text-gray-100">{{ t('dashboard.allSensors') }}</h3>
       <InputText
-        v-model="searchFilter"
+        v-model="filters.global.value"
         :placeholder="t('sensors.search')"
         class="w-64"
         size="small"
@@ -36,8 +42,8 @@ function getName(row: NeighborhoodSummary): string {
     </div>
     <DataTable
       :value="store.neighborhoodSummaries"
+      :filters="filters"
       :global-filter-fields="['name', 'nameAr']"
-      :global-filter="searchFilter"
       striped-rows
       row-hover
       sort-field="avgAqi"

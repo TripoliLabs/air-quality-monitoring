@@ -14,7 +14,8 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const store = useSensorsStore();
 
-const neighborhoodId = route.params.id as string;
+// Computed so same-route navigation (component reused, no remount) updates the view.
+const neighborhoodId = computed(() => route.params.id as string);
 
 onMounted(() => {
   if (!store.isSimulating) {
@@ -23,11 +24,11 @@ onMounted(() => {
 });
 
 const neighborhood = computed(() => {
-  return store.getNeighborhood(neighborhoodId);
+  return store.getNeighborhood(neighborhoodId.value);
 });
 
 const sensors = computed(() => {
-  return store.getSensorsByNeighborhood(neighborhoodId);
+  return store.getSensorsByNeighborhood(neighborhoodId.value);
 });
 
 /** Map centre = mean position of the neighbourhood's sensors. */
@@ -40,7 +41,7 @@ const center = computed(() => {
 });
 
 const neighborhoodName = computed(() => {
-  if (!neighborhood.value) return neighborhoodId;
+  if (!neighborhood.value) return neighborhoodId.value;
   return locale.value === 'ar' ? neighborhood.value.nameAr : neighborhood.value.name;
 });
 

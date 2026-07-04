@@ -185,7 +185,10 @@ export class AirQualitySimulator {
   }
 
   getHistory(sensorId: string): SensorReading[] {
-    return this.history.get(sensorId) ?? [];
+    // Return a copy: the caller stores this array and appends live readings to it,
+    // and the simulator also pushes onto its internal array each tick — sharing the
+    // reference would make every live reading appear twice.
+    return [...(this.history.get(sensorId) ?? [])];
   }
 
   getLatest(sensorId: string): SensorReading | undefined {
