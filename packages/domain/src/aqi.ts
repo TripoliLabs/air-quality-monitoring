@@ -8,13 +8,15 @@ interface Breakpoint {
   iHigh: number;
 }
 
+// PM2.5 24-hour breakpoints per the EPA 2024 update (effective 2024-05-06),
+// which lowered the bands (Good now ends at 9.0, not 12.0). PM10 is unchanged.
 const PM25_BREAKPOINTS: Breakpoint[] = [
-  { cLow: 0.0, cHigh: 12.0, iLow: 0, iHigh: 50 },
-  { cLow: 12.1, cHigh: 35.4, iLow: 51, iHigh: 100 },
+  { cLow: 0.0, cHigh: 9.0, iLow: 0, iHigh: 50 },
+  { cLow: 9.1, cHigh: 35.4, iLow: 51, iHigh: 100 },
   { cLow: 35.5, cHigh: 55.4, iLow: 101, iHigh: 150 },
-  { cLow: 55.5, cHigh: 150.4, iLow: 151, iHigh: 200 },
-  { cLow: 150.5, cHigh: 250.4, iLow: 201, iHigh: 300 },
-  { cLow: 250.5, cHigh: 500.4, iLow: 301, iHigh: 500 },
+  { cLow: 55.5, cHigh: 125.4, iLow: 151, iHigh: 200 },
+  { cLow: 125.5, cHigh: 225.4, iLow: 201, iHigh: 300 },
+  { cLow: 225.5, cHigh: 325.4, iLow: 301, iHigh: 500 },
 ];
 
 const PM10_BREAKPOINTS: Breakpoint[] = [

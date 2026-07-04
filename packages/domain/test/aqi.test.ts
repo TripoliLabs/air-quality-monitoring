@@ -21,9 +21,16 @@ describe('calculateAqi', () => {
     expect(r.category).toBe('good');
   });
 
-  it('computes the PM2.5 sub-index at a known breakpoint (12 µg/m³ → 50)', () => {
-    // 12.0 is the upper bound of the "good" PM2.5 band.
-    expect(calculateAqi(12, 0).aqi).toBe(50);
+  it('computes the PM2.5 sub-index at the EPA-2024 good ceiling (9.0 µg/m³ → 50)', () => {
+    // 2024 rule: the "good" band now ends at 9.0 (was 12.0).
+    expect(calculateAqi(9, 0).aqi).toBe(50);
+  });
+
+  it('puts 10 µg/m³ in moderate under the 2024 breakpoints (~53, not good)', () => {
+    // Regression guard: pre-2024 tables scored this ~42 "good".
+    const r = calculateAqi(10, 0);
+    expect(r.aqi).toBe(53);
+    expect(r.category).toBe('moderate');
   });
 
   it('computes the PM2.5 sub-index at the moderate ceiling (35.4 → 100)', () => {
