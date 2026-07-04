@@ -12,7 +12,8 @@ const READINGS_CHANNEL = 'readings';
  * `reading.created` event on the `readings` channel for every uplink; this
  * gateway relays them to all connected dashboard clients as `reading` events.
  */
-@WebSocketGateway({ cors: { origin: '*' } })
+// Match the REST CORS policy rather than allowing any origin.
+@WebSocketGateway({ cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' } })
 export class RealtimeGateway implements OnModuleInit, OnModuleDestroy {
   @WebSocketServer() private server!: Server;
   private readonly sub: Redis;

@@ -16,7 +16,8 @@ function url(
   const user = c.get<string>(`${prefix}_USERNAME`, 'airquality');
   const pass = c.get<string>(`${prefix}_PASSWORD`, 'airquality');
   const name = c.get<string>(`${prefix}_NAME`, fallbackDb);
-  return `postgres://${user}:${pass}@${host}:${port}/${name}`;
+  // Encode credentials so a password with URL-reserved chars (@ : / #) is safe.
+  return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${name}`;
 }
 
 @Global()
