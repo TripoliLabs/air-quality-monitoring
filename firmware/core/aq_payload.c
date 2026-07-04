@@ -6,13 +6,27 @@ static void put_u16(uint8_t *p, uint16_t v) {
     p[1] = (uint8_t)((v >> 8) & 0xff);
 }
 
+/* Clamp to the wire range so a negative (e.g. a calibration offset) or huge
+ * value saturates instead of wrapping modulo 2^16. */
+static uint16_t clamp_u16(float v) {
+    if (v < 0.0f) return 0;
+    if (v > 65535.0f) return 65535;
+    return (uint16_t)lroundf(v);
+}
+
+static int16_t clamp_i16(float v) {
+    if (v < -32768.0f) return -32768;
+    if (v > 32767.0f) return 32767;
+    return (int16_t)lroundf(v);
+}
+
 void aq_payload_encode(const aq_reading_t *r, uint8_t out[AQ_PAYLOAD_LEN]) {
-    put_u16(&out[0], (uint16_t)lroundf(r->pm25 * 10.0f));
-    put_u16(&out[2], (uint16_t)lroundf(r->pm10 * 10.0f));
-    put_u16(&out[4], (uint16_t)(int16_t)lroundf(r->temperature * 100.0f));
-    put_u16(&out[6], (uint16_t)lroundf(r->humidity * 100.0f));
-    put_u16(&out[8], (uint16_t)lroundf(r->pressure));
+    put_u16(&out[0], clamp_u16(r->pm25 * 10.0f));
+    put_u16(&out[2], clamp_u16(r->pm10 * 10.0f));
+    put_u16(&out[4], (uint16_t)clamp_i16(r->temperature * 100.0f));
+    put_u16(&out[6], clamp_u16(r->humidity * 100.0f));
+    put_u16(&out[8], clamp_u16(r->pressure));
     put_u16(&out[10], r->battery_mv);
-    /* This firmware carries both a PM and an environmental sensor. */
-    out[12] = AQ_PAYLOAD_VERSION | AQ_PRESENT_PM | AQ_PRESENT_ENV;
+    /* byte 12: version (low nibble) + sensor-presence bits (high nibble). */
+    out[12] = (uint8_t)(AQ_PAYLOAD_VERSION | (r->present & 0xf0));
 }

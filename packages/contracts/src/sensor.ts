@@ -4,9 +4,11 @@ import { z } from 'zod';
 export const SensorReadingSchema = z.object({
   deviceId: z.string().min(1),
   timestamp: z.iso.datetime(),
-  pm25: z.number().min(0).max(1000),
-  pm10: z.number().min(0).max(1000),
-  pm1: z.number().min(0).max(1000).optional(),
+  // Ceiling is the codec's wire max (6553.5 µg/m³), not a health cap — a 1000
+  // limit would drop the extreme dust-storm readings the network exists to record.
+  pm25: z.number().min(0).max(6553.5),
+  pm10: z.number().min(0).max(6553.5),
+  pm1: z.number().min(0).max(6553.5).optional(),
   temperature: z.number().min(-40).max(85),
   humidity: z.number().min(0).max(100),
   pressure: z.number().min(300).max(1100).optional(),

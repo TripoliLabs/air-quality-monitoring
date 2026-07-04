@@ -15,8 +15,12 @@ describe('SensorReadingSchema', () => {
     expect(SensorReadingSchema.parse(valid)).toMatchObject({ deviceId: '70b3d57ed0060001' });
   });
 
-  it('rejects pm2.5 out of range', () => {
-    expect(() => SensorReadingSchema.parse({ ...valid, pm25: 2000 })).toThrow();
+  it('accepts extreme dust-storm PM2.5 (up to the codec wire ceiling)', () => {
+    expect(SensorReadingSchema.parse({ ...valid, pm25: 2000 }).pm25).toBe(2000);
+  });
+
+  it('rejects pm2.5 above the wire ceiling', () => {
+    expect(() => SensorReadingSchema.parse({ ...valid, pm25: 7000 })).toThrow();
   });
 
   it('rejects an invalid timestamp', () => {

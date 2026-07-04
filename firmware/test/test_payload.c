@@ -8,6 +8,7 @@ static uint16_t u16(const uint8_t *b) {
 static void test_known_encoding(void) {
     aq_reading_t r = {0};
     r.pm25 = 10.0f; /* → 100 = 0x0064 LE */
+    r.present = AQ_PRESENT_PM | AQ_PRESENT_ENV;
     uint8_t buf[AQ_PAYLOAD_LEN];
     aq_payload_encode(&r, buf);
     TEST_ASSERT_EQUAL_UINT(0x64, buf[0]);
@@ -16,6 +17,18 @@ static void test_known_encoding(void) {
     /* byte 12: version (low nibble) + PM|ENV presence (high nibble). */
     TEST_ASSERT_EQUAL_UINT(AQ_PAYLOAD_VERSION | AQ_PRESENT_PM | AQ_PRESENT_ENV, buf[12]);
     TEST_ASSERT_EQUAL_UINT(AQ_PAYLOAD_VERSION, buf[12] & 0x0f);
+}
+
+static void test_partial_presence_and_clamp(void) {
+    aq_reading_t r = {0};
+    r.present = AQ_PRESENT_ENV; /* PM sensor absent/failed */
+    r.pm25 = -5.0f;             /* negative (e.g. over-applied offset) must clamp to 0 */
+    r.pm10 = 100000.0f;         /* over-range must saturate, not wrap */
+    uint8_t buf[AQ_PAYLOAD_LEN];
+    aq_payload_encode(&r, buf);
+    TEST_ASSERT_EQUAL_UINT(AQ_PAYLOAD_VERSION | AQ_PRESENT_ENV, buf[12]);
+    TEST_ASSERT_EQUAL_UINT(0, u16(&buf[0]));      /* pm25 clamped to 0 */
+    TEST_ASSERT_EQUAL_UINT(65535, u16(&buf[2]));  /* pm10 saturated */
 }
 
 static void test_full_reading_fields(void) {
@@ -47,6 +60,7 @@ static void test_negative_temperature(void) {
 int main(void) {
     printf("aq_payload tests\n");
     RUN_TEST(test_known_encoding);
+    RUN_TEST(test_partial_presence_and_clamp);
     RUN_TEST(test_full_reading_fields);
     RUN_TEST(test_negative_temperature);
     TEST_SUMMARY();

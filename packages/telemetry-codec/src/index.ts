@@ -74,15 +74,20 @@ export function decodeUplink(bytes: Uint8Array): DecodedPayload {
   };
 }
 
+// Clamp to the wire range so a negative (e.g. a calibration offset) or huge value
+// saturates instead of wrapping modulo 2^16.
+const u16 = (v: number): number => Math.max(0, Math.min(65535, Math.round(v)));
+const i16 = (v: number): number => Math.max(-32768, Math.min(32767, Math.round(v)));
+
 export function encodeUplink(p: DecodedPayload): Uint8Array {
   const bytes = new Uint8Array(PAYLOAD_LENGTH);
   const view = new DataView(bytes.buffer);
-  view.setUint16(0, Math.round(p.pm25 * 10), true);
-  view.setUint16(2, Math.round(p.pm10 * 10), true);
-  view.setInt16(4, Math.round(p.temperature * 100), true);
-  view.setUint16(6, Math.round(p.humidity * 100), true);
-  view.setUint16(8, Math.round(p.pressure), true);
-  view.setUint16(10, Math.round(p.batteryMv), true);
+  view.setUint16(0, u16(p.pm25 * 10), true);
+  view.setUint16(2, u16(p.pm10 * 10), true);
+  view.setInt16(4, i16(p.temperature * 100), true);
+  view.setUint16(6, u16(p.humidity * 100), true);
+  view.setUint16(8, u16(p.pressure), true);
+  view.setUint16(10, u16(p.batteryMv), true);
   // Mirror the firmware: version + PM|ENV present.
   bytes[12] = PAYLOAD_VERSION | PRESENT_PM | PRESENT_ENV;
   return bytes;

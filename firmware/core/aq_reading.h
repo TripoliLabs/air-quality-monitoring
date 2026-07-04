@@ -11,6 +11,7 @@ typedef struct {
     float humidity;    /* %RH */
     float pressure;    /* hPa */
     uint16_t battery_mv;
+    uint8_t present;   /* sensor-presence bits (AQ_PRESENT_*) set by aq_sample */
 } aq_reading_t;
 
 #endif /* AQ_READING_H */
