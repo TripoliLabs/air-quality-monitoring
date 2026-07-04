@@ -13,6 +13,8 @@ export const REDIS = 'REDIS';
       useFactory: (c: ConfigService) =>
         new Redis(c.get<string>('REDIS_URL', 'redis://localhost:6379'), {
           maxRetriesPerRequest: null,
+          // Fail a command (→ a fast API error) rather than hang forever if Redis is down.
+          commandTimeout: 2000,
         }),
     },
   ],
