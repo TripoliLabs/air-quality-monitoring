@@ -24,6 +24,10 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
     'readings_ingested',
     'Uplinks decoded, AQI-computed, and persisted',
   );
+  private readonly readingsDropped = createCounter(
+    'readings_dropped',
+    'Uplinks dropped before persistence (incomplete sensors, or a decode/persist error)',
+  );
   private readonly db: TelemetryDb;
   private readonly redis: Redis;
   private client?: MqttClient;
@@ -42,6 +46,9 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
     this.log.info('connecting to MQTT broker', { url });
     // Persistent session (clean:false + stable clientId) + QoS 1 so uplinks
     // published while ingestion is restarting are queued, not lost.
+    // NOTE: the fixed clientId assumes a SINGLE ingestion instance — a second
+    // replica would take over this session. Move to a shared subscription
+    // ($share/aq/application/…) before scaling ingestion horizontally.
     this.client = connect(url, { clientId: 'aq-ingestion', clean: false });
     this.client.on('connect', () => {
       this.client?.subscribe(UPLINK_TOPIC, { qos: 1 }, (err) => {
@@ -78,6 +85,18 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       // 2) Decode the base64 frmPayload with the shared codec (same layout as firmware).
       const bytes = new Uint8Array(Buffer.from(uplink.data, 'base64'));
       const decoded = decodeUplink(bytes);
+
+      // A node with a dead sensor clears its presence bit and zero-fills the field.
+      // Until per-field nullable persistence lands, persisting pm25=0 as a real
+      // reading would broadcast "AQI 0 / good" for a node with no working PM sensor
+      // — worse than the honest data gap. So drop partial readings (and count them,
+      // so the missing sensor is visible in metrics rather than silently absent).
+      if (!decoded.sensorsPresent?.pm || !decoded.sensorsPresent?.env) {
+        this.readingsDropped.add(1, { reason: 'incomplete_sensors' });
+        this.log.warn('dropping incomplete reading', { deviceId, present: decoded.sensorsPresent });
+        return;
+      }
+
       const rssi = uplink.rxInfo?.[0]?.rssi;
 
       // Normalise ChirpStack's RFC3339 time (nanosecond precision) to strict ISO.
@@ -132,6 +151,7 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       this.readingsIngested.add(1, { category: aqi.category });
       this.log.info('reading ingested', { deviceId, aqi: aqi.aqi, category: aqi.category });
     } catch (err) {
+      this.readingsDropped.add(1, { reason: 'error' });
       this.log.error('failed to ingest uplink', { topic, error: String(err) });
     }
   }

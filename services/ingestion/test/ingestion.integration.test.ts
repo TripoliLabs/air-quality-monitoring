@@ -5,7 +5,7 @@
  * (observed via the API's Redis-backed latest endpoint).
  *   pnpm --filter @aq/ingestion test:integration
  */
-import { encodeUplink } from '@aq/telemetry-codec';
+import { encodeUplink, PRESENT_PM } from '@aq/telemetry-codec';
 import { connect, type MqttClient } from 'mqtt';
 import { describe, expect, it } from 'vitest';
 
@@ -67,4 +67,40 @@ describe('ingestion integration', () => {
     // PM2.5 88.8 µg/m³ sits in the "unhealthy" band.
     expect(latest?.aqi).toBeGreaterThan(150);
   }, 20_000);
+
+  it('drops a partial reading (a sensor-presence bit cleared)', async () => {
+    const client = await new Promise<MqttClient>((resolve, reject) => {
+      const c = connect(MQTT_URL);
+      c.on('connect', () => resolve(c));
+      c.on('error', reject);
+    });
+
+    const partialEui = 'eeeeeeee00000002';
+    const payload = encodeUplink({
+      pm25: 50,
+      pm10: 60,
+      temperature: 22,
+      humidity: 40,
+      pressure: 1010,
+      batteryMv: 3700,
+    });
+    payload[12] &= ~PRESENT_PM; // the node reports its PM sensor is absent/failed
+
+    const uplink = {
+      deviceInfo: { devEui: partialEui, deviceName: 'partial-test' },
+      fPort: 2,
+      fCnt: 1,
+      data: Buffer.from(payload).toString('base64'),
+      time: new Date().toISOString(),
+    };
+    client.publish(`application/${APP}/device/${partialEui}/event/up`, JSON.stringify(uplink), {
+      qos: 0,
+    });
+    await sleep(2500); // give ingestion time to (not) persist it
+    await client.endAsync();
+
+    // Dropped, never persisted → no cached latest (an honest gap, not a fake 0).
+    const res = await fetch(`${API}/sensors/${partialEui}/latest`);
+    expect(res.status).toBe(404);
+  }, 15_000);
 });
