@@ -69,11 +69,16 @@ export function initTelemetry(service: string): void {
   });
 
   sdk.start();
-  const shutdown = (): void => {
-    void sdk?.shutdown();
-  };
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
+}
+
+/**
+ * Flush + stop the OpenTelemetry SDK so its exporters/metrics server release
+ * their handles and the process can exit. Call during graceful shutdown — NOT
+ * from a raw signal handler that skips the app's own teardown.
+ */
+export async function shutdownTelemetry(): Promise<void> {
+  await sdk?.shutdown();
+  sdk = undefined;
 }
 
 /**
