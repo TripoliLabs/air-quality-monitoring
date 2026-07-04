@@ -42,6 +42,8 @@ export const useSensorsStore = defineStore('sensors', () => {
   const sensorMap = ref<Map<string, SensorTimeSeries>>(new Map());
   const isSimulating = ref(false);
   const lastUpdate = ref<Date | null>(null);
+  const loading = ref(false);
+  const error = ref<string | null>(null);
 
   let service: SensorService | null = null;
   let unsubscribe: (() => void) | null = null;
@@ -124,28 +126,45 @@ export const useSensorsStore = defineStore('sensors', () => {
 
   /** Connect to the data source, load sensors + history, and stream live updates. */
   async function startSimulation(): Promise<void> {
-    if (isSimulating.value) return;
-    isSimulating.value = true;
-    service = createSensorService();
+    if (isSimulating.value || loading.value) return;
+    loading.value = true;
+    error.value = null;
+    try {
+      service = createSensorService();
 
-    const sensors = await service.getSensors();
-    const map = new Map<string, SensorTimeSeries>();
-    for (const def of sensors) map.set(def.id, { definition: def, latest: null, history: [] });
-    sensorMap.value = map;
+      const sensors = await service.getSensors();
+      const map = new Map<string, SensorTimeSeries>();
+      for (const def of sensors) map.set(def.id, { definition: def, latest: null, history: [] });
+      sensorMap.value = map;
 
-    await Promise.all(
-      sensors.map(async (def) => {
-        const history = await service?.getHistory(def.id);
-        const series = sensorMap.value.get(def.id);
-        if (series && history) {
-          series.history = history;
-          series.latest = history[history.length - 1] ?? null;
-        }
-      }),
-    );
-    lastUpdate.value = new Date();
+      await Promise.all(
+        sensors.map(async (def) => {
+          const history = await service?.getHistory(def.id);
+          const series = sensorMap.value.get(def.id);
+          if (series && history) {
+            series.history = history;
+            series.latest = history[history.length - 1] ?? null;
+          }
+        }),
+      );
+      lastUpdate.value = new Date();
 
-    unsubscribe = service.subscribe(applyReading);
+      unsubscribe = service.subscribe(applyReading);
+      isSimulating.value = true;
+    } catch (err) {
+      // Leave isSimulating false so the view can retry (button or re-mount).
+      error.value = err instanceof Error ? err.message : String(err);
+      service?.dispose();
+      service = null;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /** Re-attempt the initial load after a failure. */
+  async function retry(): Promise<void> {
+    error.value = null;
+    await startSimulation();
   }
 
   function stopSimulation(): void {
@@ -166,6 +185,9 @@ export const useSensorsStore = defineStore('sensors', () => {
     sensorMap,
     isSimulating,
     lastUpdate,
+    loading,
+    error,
+    retry,
     allSensors,
     activeSensorCount,
     averageAqi,

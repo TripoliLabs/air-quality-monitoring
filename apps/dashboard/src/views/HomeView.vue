@@ -35,6 +35,29 @@ onMounted(() => {
 
 <template>
   <div class="space-y-4">
+    <!-- Load failure — surface it with a retry instead of a silently blank page -->
+    <div
+      v-if="store.error"
+      class="flex items-center justify-between gap-3 rounded-xl border border-red-800 bg-red-950/40 p-4"
+    >
+      <span class="text-sm text-red-300">{{ t('common.error') }}</span>
+      <button
+        type="button"
+        class="rounded-lg bg-red-800 px-3 py-1 text-sm text-red-100 hover:bg-red-700"
+        @click="store.retry()"
+      >
+        {{ t('common.retry') }}
+      </button>
+    </div>
+
+    <!-- Initial load -->
+    <div
+      v-else-if="store.loading && store.allSensors.length === 0"
+      class="p-8 text-center text-sm text-gray-500"
+    >
+      {{ t('common.loading') }}
+    </div>
+
     <!-- Stats Bar -->
     <StatsBar />
 
