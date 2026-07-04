@@ -24,7 +24,9 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "hal/RadioLibHal.h"
+/* RadioLib's HAL base class. In RadioLib 6.x this is <Hal.h> (top of src/); 7.x
+ * moved it to <hal/RadioLibHal.h>. Pinned to 6.6.0, so use Hal.h. */
+#include "Hal.h"
 
 /* SPI host wired to the SX1276 on the T-Beam (VSPI / SPI3 on classic ESP32). */
 #ifndef AQ_LORA_SPI_HOST

@@ -60,8 +60,10 @@ extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len);
 #ifdef AQ_HAVE_RADIOLIB
 /* ===========================  REAL IMPLEMENTATION  ========================= */
 #include <RadioLib.h>
+#include <string.h>
 
 #include "EspHal.h"
+#include "esp_attr.h" /* RTC_DATA_ATTR */
 
 /* SX1276 radio pin map for the T-Beam V1.x — CONFIRM ON HARDWARE. */
 #ifndef AQ_LORA_PIN_SCK
@@ -92,11 +94,34 @@ static SX1276 s_radio =
     new Module(&s_hal, AQ_LORA_PIN_CS, AQ_LORA_PIN_DIO0, AQ_LORA_PIN_RST, AQ_LORA_PIN_DIO1);
 static LoRaWANNode s_node(&s_radio, &EU868);
 
+/* LoRaWAN state persisted across deep sleep in RTC RAM, so we do NOT re-join on
+ * every 5-minute wake. A fresh OTAA join per wake is 288 joins/day/device —
+ * violating join-backoff, churning DevNonces (risking a network-side reject),
+ * and wasting the solar budget on join RX windows. The *nonces* buffer carries
+ * the monotonic DevNonce; the *session* buffer carries the derived keys + frame
+ * counters. Both survive deep sleep in RTC RAM (lost only on a full power cut,
+ * after which a fresh join is correct). RTC RAM is limited — these buffers are a
+ * few hundred bytes, well within budget.
+ *
+ * API NOTE: the getBufferNonces / getBufferSession (and setBuffer...) persistence
+ * calls and the RADIOLIB_LORAWAN_..._BUF_SIZE sizes are the RadioLib 6.x LoRaWAN
+ * API, matching the 6.6.0 pin. Verify against the pinned version before flashing. */
+RTC_DATA_ATTR static uint8_t s_nonces[RADIOLIB_LORAWAN_NONCES_BUF_SIZE];
+RTC_DATA_ATTR static uint8_t s_session[RADIOLIB_LORAWAN_SESSION_BUF_SIZE];
+RTC_DATA_ATTR static bool s_have_nonces = false;
+RTC_DATA_ATTR static bool s_have_session = false;
+
 static bool s_joined = false;
 
-/* Perform an OTAA join. The radio session lives in RAM and is lost across deep
- * sleep, so we (re)join on each cold boot. Persisting the session to RTC RAM /
- * NVS to skip re-joins is a documented future optimization. */
+/* Snapshot the current nonces + session into RTC RAM. */
+static void lorawan_save_state(void) {
+    memcpy(s_nonces, s_node.getBufferNonces(), RADIOLIB_LORAWAN_NONCES_BUF_SIZE);
+    s_have_nonces = true;
+    memcpy(s_session, s_node.getBufferSession(), RADIOLIB_LORAWAN_SESSION_BUF_SIZE);
+    s_have_session = true;
+}
+
+/* Restore a persisted session if we have one, else perform a fresh OTAA join. */
 static int lorawan_join(void) {
     uint64_t joinEUI = AQ_LORAWAN_JOIN_EUI;
     uint64_t devEUI = AQ_LORAWAN_DEV_EUI;
@@ -110,14 +135,27 @@ static int lorawan_join(void) {
         return -1;
     }
 
-    ESP_LOGI(TAG, "starting OTAA join");
     s_node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
+    /* Feed back the persisted DevNonce counter + session so activateOTAA() can
+     * resume instead of re-joining. */
+    if (s_have_nonces) {
+        s_node.setBufferNonces(s_nonces);
+    }
+    if (s_have_session) {
+        s_node.setBufferSession(s_session);
+    }
+
     state = s_node.activateOTAA();
     if (state != RADIOLIB_LORAWAN_NEW_SESSION && state != RADIOLIB_LORAWAN_SESSION_RESTORED) {
         ESP_LOGE(TAG, "OTAA join failed: %d", state);
         return -1;
     }
-    ESP_LOGI(TAG, "OTAA join OK (state=%d)", state);
+    if (state == RADIOLIB_LORAWAN_NEW_SESSION) {
+        ESP_LOGI(TAG, "new OTAA join");
+        lorawan_save_state(); /* persist the new DevNonce immediately */
+    } else {
+        ESP_LOGI(TAG, "LoRaWAN session restored — re-join skipped");
+    }
     s_joined = true;
     return 0;
 }
@@ -135,6 +173,8 @@ extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len) {
         ESP_LOGE(TAG, "uplink failed: %d", state);
         return -1;
     }
+    /* Persist the advanced frame counters so the next wake resumes cleanly. */
+    lorawan_save_state();
     ESP_LOGI(TAG, "uplink sent on fPort %u (%u bytes)", fPort, len);
     return 0;
 }
