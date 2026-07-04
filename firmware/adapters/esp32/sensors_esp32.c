@@ -30,6 +30,8 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "i2c_esp32.h"
+#include "pmu_esp32.h"
 
 static const char *TAG = "sensors";
 
@@ -51,6 +53,13 @@ static const char *TAG = "sensors";
 #endif
 #define AQ_PMS_BAUD 9600
 #define AQ_PMS_FRAME_LEN 32 /* full active-mode data frame */
+/* Fan spin-up + air-exchange settle time after waking the PMS7003 before its
+ * readings are trustworthy (datasheet: ~30 s stable). Keeping the fan asleep the
+ * rest of the ~5 min cycle is what saves the ~100 mA that would otherwise drain
+ * the pack in ~30 h of no sun. */
+#ifndef AQ_PMS_WARMUP_MS
+#define AQ_PMS_WARMUP_MS 30000
+#endif
 
 /* BME280 (I2C). The T-Beam's I2C bus (also the AXP192 PMU) is SDA=21 / SCL=22. */
 #ifndef AQ_I2C_SDA_PIN
@@ -119,6 +128,24 @@ static int pms_init(void) {
  * timeout. */
 static int pms_read_byte(uint8_t *out, TickType_t timeout) {
     return uart_read_bytes(AQ_PMS_UART_NUM, out, 1, timeout) == 1 ? 1 : 0;
+}
+
+/* PMS7003 command frames (fixed, incl. the trailing big-endian checksum). */
+static void pms_send(const uint8_t *cmd, size_t len) {
+    uart_write_bytes(AQ_PMS_UART_NUM, (const char *)cmd, len);
+    uart_wait_tx_done(AQ_PMS_UART_NUM, pdMS_TO_TICKS(100));
+}
+
+/* Sleep: fan + laser off (~µA). */
+static void pms_sleep(void) {
+    static const uint8_t cmd[] = {0x42, 0x4D, 0xE4, 0x00, 0x00, 0x01, 0x73};
+    pms_send(cmd, sizeof(cmd));
+}
+
+/* Wake into active mode (streams data frames). */
+static void pms_wake(void) {
+    static const uint8_t cmd[] = {0x42, 0x4D, 0xE4, 0x00, 0x01, 0x01, 0x74};
+    pms_send(cmd, sizeof(cmd));
 }
 
 /*
@@ -195,9 +222,15 @@ int esp32_read_pm(float *pm25, float *pm10) {
     if (pms_init() != 0) {
         return -1;
     }
-    /* Drop any partially-buffered frame so we sync on a fresh one. */
+    /* Wake the fan, let it settle, read, then put it back to sleep so it isn't
+     * drawing ~100 mA for the whole deep-sleep cycle. */
+    pms_wake();
+    vTaskDelay(pdMS_TO_TICKS(AQ_PMS_WARMUP_MS));
+    /* Drop everything buffered during warm-up so we sync on a fresh frame. */
     uart_flush_input(AQ_PMS_UART_NUM);
-    return esp32_read_pm_frame(pm25, pm10);
+    int rc = esp32_read_pm_frame(pm25, pm10);
+    pms_sleep();
+    return rc;
 }
 
 /* ----------------------------------------------------------------------------
@@ -280,19 +313,11 @@ static int bme_init(void) {
         return 0;
     }
     esp_err_t err;
+    /* Shared bus (the AXP2101 PMU is on the same wires). */
+    s_i2c_bus = esp32_i2c_bus();
     if (s_i2c_bus == NULL) {
-        const i2c_master_bus_config_t bus_cfg = {
-            .clk_source = I2C_CLK_SRC_DEFAULT,
-            .i2c_port = I2C_NUM_0,
-            .scl_io_num = AQ_I2C_SCL_PIN,
-            .sda_io_num = AQ_I2C_SDA_PIN,
-            .glitch_ignore_cnt = 7,
-            .flags.enable_internal_pullup = true,
-        };
-        if ((err = i2c_new_master_bus(&bus_cfg, &s_i2c_bus)) != ESP_OK) {
-            ESP_LOGE(TAG, "i2c_new_master_bus failed: %s", esp_err_to_name(err));
-            return -1;
-        }
+        ESP_LOGE(TAG, "i2c bus unavailable");
+        return -1;
     }
     const i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -461,6 +486,13 @@ static int batt_init(void) {
 }
 
 uint16_t esp32_read_battery_mv(void) {
+    /* Prefer the PMU's battery ADC — the stock T-Beam V1.2 monitors the pack via
+     * the AXP2101, not a bare divider. Fall back to the ADC path if the PMU
+     * didn't initialise (e.g. an AXP192 board or a modified divider design). */
+    uint16_t pmu_mv = esp32_pmu_battery_mv();
+    if (pmu_mv > 0) {
+        return pmu_mv;
+    }
     if (batt_init() != 0) {
         return 0;
     }

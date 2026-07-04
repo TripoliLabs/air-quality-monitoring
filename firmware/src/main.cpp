@@ -18,6 +18,7 @@ extern "C" {
 #include "aq_sensors.h"
 
 /* ESP32 hardware adapters (firmware/adapters/esp32). */
+int esp32_pmu_init(void);
 int esp32_read_pm(float *pm25, float *pm10);
 int esp32_read_env(float *temp_c, float *humidity, float *pressure_hpa);
 uint16_t esp32_read_battery_mv(void);
@@ -35,6 +36,12 @@ static const aq_sensor_hal_t HAL = {
 
 extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Air Quality node v0.1.0 starting");
+
+    /* Power the LoRa + GPS rails (and battery ADC) before touching the radio or
+     * the I2C sensors — on the T-Beam V1.2 the SX1276 rail is PMU-switched. */
+    if (esp32_pmu_init() != 0) {
+        ESP_LOGW(TAG, "PMU init failed — radio/sensors may be unpowered");
+    }
 
     aq_reading_t reading;
     if (aq_sample(&HAL, &reading) == 0) {
