@@ -37,6 +37,13 @@ describe('calculateAqi', () => {
     expect(calculateAqi(35.4, 0).aqi).toBe(100);
   });
 
+  it('truncates PM2.5 to 0.1 before lookup (EPA rule): 9.09 → good, not moderate', () => {
+    // Without truncation 9.09 would round into the moderate band (AQI 51).
+    const r = calculateAqi(9.09, 0);
+    expect(r.aqi).toBe(50);
+    expect(r.category).toBe('good');
+  });
+
   it('takes the max of the PM2.5 and PM10 sub-indices', () => {
     // Clean PM2.5, dirty PM10 → PM10 dominates.
     const r = calculateAqi(5, 200);

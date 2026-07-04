@@ -28,8 +28,18 @@ const PM10_BREAKPOINTS: Breakpoint[] = [
   { cLow: 425, cHigh: 604, iLow: 301, iHigh: 500 },
 ];
 
-function subIndex(concentration: number, breakpoints: Breakpoint[]): number {
-  const c = Math.max(0, concentration);
+// EPA rule: truncate the concentration to the pollutant's reporting resolution
+// BEFORE the breakpoint lookup (PM2.5 → 0.1 µg/m³, PM10 → 1 µg/m³), so a boundary
+// value like 9.09 reports in the correct band (good, not moderate).
+const truncPm25 = (c: number): number => Math.floor(c * 10) / 10;
+const truncPm10 = (c: number): number => Math.floor(c);
+
+function subIndex(
+  concentration: number,
+  breakpoints: Breakpoint[],
+  truncate: (c: number) => number,
+): number {
+  const c = truncate(Math.max(0, concentration));
   const bp = breakpoints.find((b) => c <= b.cHigh) ?? breakpoints[breakpoints.length - 1];
   // Clamp to the band so concentrations above the top breakpoint cap at the
   // band ceiling (EPA AQI maxes at 500) rather than extrapolating past it.
@@ -49,8 +59,8 @@ export function aqiCategory(aqi: number): AqiCategory {
 
 /** Compute the overall AQI as the max of the PM2.5 and PM10 sub-indices. */
 export function calculateAqi(pm25: number, pm10: number): AqiResult {
-  const pm25Index = subIndex(pm25, PM25_BREAKPOINTS);
-  const pm10Index = subIndex(pm10, PM10_BREAKPOINTS);
+  const pm25Index = subIndex(pm25, PM25_BREAKPOINTS, truncPm25);
+  const pm10Index = subIndex(pm10, PM10_BREAKPOINTS, truncPm10);
   const dominantPollutant = pm25Index >= pm10Index ? 'pm25' : 'pm10';
   const aqi = Math.max(pm25Index, pm10Index);
   return { aqi, category: aqiCategory(aqi), dominantPollutant };
