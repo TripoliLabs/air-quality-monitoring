@@ -75,12 +75,12 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 ### Tooling
 
 **Package Manager:** pnpm 11+ (strict node_modules, catalogs, best-in-class Docker caching) (ADR-003)
-**Monorepo:** Turborepo (task graph + caching, affected-graph CI)
+**Monorepo:** Turborepo (task graph + caching)
 **Backend Linting:** Biome 2.5+ (Rust-based, type-aware lint + formatter, replaces ESLint + Prettier)
 **Frontend Linting:** ESLint 9+ with eslint-plugin-vue (only tool with real Vue template analysis)
 **Frontend Formatting:** Prettier with prettier-plugin-tailwindcss
 **Git Hooks:** Lefthook (Go-based, fast parallel execution)
-**CI:** GitHub Actions (Turbo affected-graph)
+**CI:** GitHub Actions (Turbo task caching; affected-graph filtering is a TODO)
 **C++ Build:** PlatformIO (ESP32 ecosystem) + xmake (for dependencies)
 
 > Bun is *not* used to install or run code (ADR-003). It may optionally be used as a fast test runner (`bun test`) on shared packages.

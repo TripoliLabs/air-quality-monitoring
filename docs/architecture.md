@@ -6,6 +6,14 @@
 > rationale behind the major structural and technology decisions. It supersedes
 > the original (≈2025) tech-organized layout. See [Migration Plan](#migration-plan)
 > for how we get from the old structure to this one.
+>
+> ⚠️ **Superseded on hosting/DB/broker/observability:** the DigitalOcean +
+> TigerData + EMQX/NanoMQ + affected-graph references below predate
+> [`deployment-and-strategy.md`](deployment-and-strategy.md), which is now the
+> source of truth — **Hetzner self-hosted, self-hosted Timescale (TigerData
+> retired), Mosquitto everywhere, Alloy → Grafana Cloud**, and CI is Turbo
+> *caching* (affected-graph filtering is still a TODO). Those sections here are
+> pending an ADR refresh; trust the deployment doc where they conflict.
 
 ---
 
