@@ -44,11 +44,24 @@ extern "C" void app_main(void) {
     }
 
     aq_reading_t reading;
-    if (aq_sample(&HAL, &reading) == 0) {
+    int sampled = aq_sample(&HAL, &reading);
+#ifdef AQ_BENCH_SEND_WITHOUT_SENSORS
+    /* Bench bring-up only: with no sensors wired, still join and send so the
+     * radio path can be tested. The payload's presence bits are all clear, so
+     * ingestion drops it rather than storing fake zeros. */
+    if (sampled != 0) {
+        ESP_LOGW(TAG, "no sensor reported — sending anyway (bench build)");
+        sampled = 0;
+    }
+#endif
+    if (sampled == 0) {
         uint8_t payload[AQ_PAYLOAD_LEN];
         aq_payload_encode(&reading, payload);
-        lorawan_send_payload(payload, AQ_PAYLOAD_LEN);
-        ESP_LOGI(TAG, "uplink sent: pm2.5=%.1f aqi-source bytes=%d", reading.pm25, AQ_PAYLOAD_LEN);
+        if (lorawan_send_payload(payload, AQ_PAYLOAD_LEN) == 0) {
+            ESP_LOGI(TAG, "uplink sent: pm2.5=%.1f bytes=%d", reading.pm25, AQ_PAYLOAD_LEN);
+        } else {
+            ESP_LOGE(TAG, "uplink failed");
+        }
     } else {
         ESP_LOGE(TAG, "sensor sample failed");
     }
