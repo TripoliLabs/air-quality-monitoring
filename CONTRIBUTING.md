@@ -285,11 +285,11 @@ Git hooks (lint, format, commit-msg) are installed automatically on `pnpm instal
 - [ ] Self-review of code completed
 - [ ] Tests added/updated and passing
 - [ ] Documentation updated (if applicable)
-- [ ] Branch is up to date with `staging`
+- [ ] Branch is up to date with `main`
 
 ### Submitting a Pull Request
 
-1. **Create PR** from your fork to the `staging` branch
+1. **Create PR** from your fork to the `main` branch
 2. **Fill out the template** completely
 3. **Link related issues** using keywords (Fixes #123, Closes #456)
 4. **Request review** from maintainers and **respond to feedback** promptly
