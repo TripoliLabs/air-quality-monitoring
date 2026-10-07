@@ -9,6 +9,10 @@ on:
 jobs:
   welcome:
     runs-on: ubuntu-latest
+    # The action posts a comment on the issue or PR; the default token is read-only.
+    permissions:
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/first-interaction@v3
         with:
