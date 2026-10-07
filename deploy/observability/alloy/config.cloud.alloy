@@ -50,7 +50,7 @@ otelcol.auth.basic "cloud" {
 prometheus.scrape "services" {
   targets = [
     { "__address__" = "api:9464", "service" = "api" },
-    { "__address__" = "ingestion:9464", "service" = "ingestion" },
+    { "__address__" = "ingestion:9465", "service" = "ingestion" },
   ]
   scrape_interval = "15s"
   forward_to      = [prometheus.remote_write.default.receiver]

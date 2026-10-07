@@ -1,15 +1,31 @@
 /* PrimeIcons */
 @import 'primeicons/primeicons.css';
 
-@layer tailwind-base, primevue, tailwind-utilities;
+/* Tailwind CSS 4 — configured in CSS (no tailwind.config.js / PostCSS plugin). */
+@import 'tailwindcss';
 
-@layer tailwind-base {
-  @tailwind base;
+/* Dark mode is toggled with a `.dark` class (same selector PrimeVue uses). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-aqi-good: #00e400;
+  --color-aqi-moderate: #ffff00;
+  --color-aqi-unhealthy-sensitive: #ff7e00;
+  --color-aqi-unhealthy: #ff0000;
+  --color-aqi-very-unhealthy: #8f3f97;
+  --color-aqi-hazardous: #7e0023;
 }
 
-@layer tailwind-utilities {
-  @tailwind components;
-  @tailwind utilities;
+/* Tailwind 4 changed the default border colour to currentColor; keep the
+   Tailwind 3 default so existing borders look the same. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
 }
 
 /* Base resets for full viewport */

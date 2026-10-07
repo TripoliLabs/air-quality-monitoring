@@ -47,18 +47,18 @@ function formatStarCount(count: number): string {
 
 <template>
   <div
-    class="relative h-screen w-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+    class="relative h-screen w-screen overflow-hidden bg-linear-to-br from-slate-900 via-slate-800 to-slate-900"
   >
     <!-- Particle Effect Background -->
     <ParticleBreeze />
 
     <!-- Gradient Overlay -->
     <div
-      class="absolute inset-0 z-0 bg-gradient-to-t from-slate-900/80 via-transparent to-slate-900/40"
+      class="absolute inset-0 z-0 bg-linear-to-t from-slate-900/80 via-transparent to-slate-900/40"
     />
 
     <!-- Accent Glow -->
-    <div class="absolute -left-40 top-1/4 z-0 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
+    <div class="absolute top-1/4 -left-40 z-0 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
     <div class="absolute -right-40 bottom-1/4 z-0 h-96 w-96 rounded-full bg-sky-500/10 blur-3xl" />
 
     <!-- Content -->
@@ -67,7 +67,7 @@ function formatStarCount(count: number): string {
       <header class="flex items-center justify-between p-6 md:p-8">
         <div class="flex items-center gap-3">
           <div
-            class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-sky-500"
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-sky-500"
           >
             <svg
               class="h-6 w-6 text-white"
@@ -87,7 +87,7 @@ function formatStarCount(count: number): string {
         </div>
 
         <button
-          class="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
+          class="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 backdrop-blur-xs transition-all hover:bg-white/10 hover:text-white"
           @click="toggleLocale"
         >
           {{ locale === 'en' ? 'العربية' : 'English' }}
@@ -119,12 +119,12 @@ function formatStarCount(count: number): string {
           ]"
         >
           <span
-            class="block text-lg font-medium uppercase tracking-[0.3em] text-white/50 md:text-xl"
+            class="block text-lg font-medium tracking-[0.3em] text-white/50 uppercase md:text-xl"
           >
             {{ t('landing.project') }}
           </span>
           <span
-            class="mt-2 block bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-6xl font-bold tracking-tight text-transparent md:text-8xl"
+            class="mt-2 block bg-linear-to-r from-white via-white to-white/70 bg-clip-text text-6xl font-bold tracking-tight text-transparent md:text-8xl"
           >
             Qalawun
           </span>
@@ -153,7 +153,7 @@ function formatStarCount(count: number): string {
           ]"
         >
           <button
-            class="group relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 px-8 py-4 font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:shadow-xl hover:shadow-emerald-500/30"
+            class="group relative overflow-hidden rounded-xl bg-linear-to-r from-emerald-500 to-sky-500 px-8 py-4 font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:shadow-xl hover:shadow-emerald-500/30"
             @click="enterDashboard"
           >
             <span class="relative z-10 flex items-center gap-2">
@@ -169,14 +169,14 @@ function formatStarCount(count: number): string {
               </svg>
             </span>
             <div
-              class="absolute inset-0 -z-0 bg-gradient-to-r from-emerald-600 to-sky-600 opacity-0 transition-opacity group-hover:opacity-100"
+              class="absolute inset-0 -z-0 bg-linear-to-r from-emerald-600 to-sky-600 opacity-0 transition-opacity group-hover:opacity-100"
             />
           </button>
 
           <a
             :href="`https://github.com/${GITHUB_REPO}`"
             target="_blank"
-            class="group flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-8 py-4 font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/10"
+            class="group flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-8 py-4 font-semibold text-white backdrop-blur-xs transition-all hover:bg-white/10"
           >
             <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
               <path

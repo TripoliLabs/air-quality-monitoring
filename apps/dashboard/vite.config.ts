@@ -1,19 +1,20 @@
 import { resolve } from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
-      '@components': resolve(__dirname, 'src/components'),
-      '@views': resolve(__dirname, 'src/views'),
-      '@i18n': resolve(__dirname, 'src/i18n'),
-      '@stores': resolve(__dirname, 'src/stores'),
-      '@composables': resolve(__dirname, 'src/composables'),
-      '@mock': resolve(__dirname, 'src/mock'),
+      '@': resolve(import.meta.dirname, 'src'),
+      '@components': resolve(import.meta.dirname, 'src/components'),
+      '@views': resolve(import.meta.dirname, 'src/views'),
+      '@i18n': resolve(import.meta.dirname, 'src/i18n'),
+      '@stores': resolve(import.meta.dirname, 'src/stores'),
+      '@composables': resolve(import.meta.dirname, 'src/composables'),
+      '@mock': resolve(import.meta.dirname, 'src/mock'),
     },
   },
   server: {
@@ -24,6 +25,9 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  worker: {
+    format: 'es',
   },
   build: {
     target: 'esnext',

@@ -34,3 +34,4 @@ docs/
 
 # firmware host build artifacts (rebuilt inside the image)
 firmware/build/
+.pnpm-store

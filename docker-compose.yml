@@ -34,7 +34,7 @@ services:
   # with app reads. Schema is owned by migrations, not initdb (init only adds
   # the pg_trgm extension ChirpStack needs).
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: airquality-postgres
     restart: unless-stopped
     environment:
@@ -44,7 +44,7 @@ services:
     ports:
       - "${APP_DB_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./deploy/local/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USERNAME:-airquality} -d ${APP_DB_NAME:-airquality}"]
@@ -56,7 +56,7 @@ services:
   # readings ONLY: hypertables, continuous aggregates, compression + retention.
   # The timescaledb extension is auto-created in POSTGRES_DB by this image.
   timescaledb:
-    image: timescale/timescaledb:2.25.0-pg16 # pinned — a floating tag breaks on a random pull
+    image: timescale/timescaledb:2.30.2-pg18 # pinned — a floating tag breaks on a random pull
     container_name: airquality-timescaledb
     restart: unless-stopped
     environment:
@@ -66,7 +66,7 @@ services:
     ports:
       - "${TSDB_PORT:-5439}:5432"
     volumes:
-      - timescaledb_data:/var/lib/postgresql/data
+      - timescaledb_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${TSDB_USERNAME:-airquality} -d ${TSDB_NAME:-telemetry}"]
       interval: 10s
@@ -74,7 +74,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: airquality-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
@@ -204,7 +204,7 @@ services:
 
   # Tempo — traces backend; receives OTLP from Alloy.
   tempo:
-    image: grafana/tempo:2.6.1
+    image: grafana/tempo:3.1.0
     container_name: airquality-tempo
     restart: unless-stopped
     profiles: ["observability"]

@@ -9,20 +9,20 @@ pre-commit:
       glob: "{apps/api,services,packages}/**/*.{ts,js}"
       # --no-errors-on-unmatched: staged files outside Biome's `src/**` scope
       # (e.g. test/ files) are skipped instead of failing the hook.
-      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files} && git add {staged_files}
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
 
     # Dashboard — ESLint + Prettier
     dashboard-lint:
       root: "apps/dashboard/"
       glob: "**/*.{ts,js,vue}"
-      run: pnpm exec eslint --fix {staged_files} && git add {staged_files}
+      run: pnpm exec eslint --fix {staged_files}
       stage_fixed: true
 
     dashboard-format:
       root: "apps/dashboard/"
       glob: "**/*.{ts,js,vue,css,json,html}"
-      run: pnpm exec prettier --write {staged_files} && git add {staged_files}
+      run: pnpm exec prettier --write {staged_files}
       stage_fixed: true
 
     # Secrets detection (enable when ready)

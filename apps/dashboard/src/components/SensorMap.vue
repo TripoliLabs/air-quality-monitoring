@@ -2,7 +2,9 @@
 import { getAqiColor } from '@composables/useAqi';
 import { TRIPOLI_CENTER } from '@mock/sensors';
 import type { SensorTimeSeries } from '@stores/sensors';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+// MapLibre 6 loads its worker from a separate module; give it a URL the bundler resolves.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -34,6 +36,8 @@ const emit = defineEmits<{
 const { t, locale } = useI18n();
 const mapContainer = ref<HTMLDivElement | null>(null);
 const activeLayer = ref<MapLayer>('aqi');
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
 let map: maplibregl.Map | null = null;
 const markers: Map<string, maplibregl.Marker> = new Map();
 
@@ -348,7 +352,7 @@ onBeforeUnmount(() => {
     <!-- Layer toggle (top-left) -->
     <div
       v-if="interactive"
-      class="absolute start-3 top-3 z-10 flex rounded-lg border border-gray-700 bg-gray-900/90 backdrop-blur-sm"
+      class="absolute start-3 top-3 z-10 flex rounded-lg border border-gray-700 bg-gray-900/90 backdrop-blur-xs"
     >
       <button
         v-for="layer in layers"
@@ -376,7 +380,7 @@ onBeforeUnmount(() => {
     <!-- Legend (bottom-left) -->
     <div
       v-if="interactive"
-      class="absolute bottom-3 start-3 z-10 rounded-lg border border-gray-700 bg-gray-900/90 px-3 py-2 backdrop-blur-sm"
+      class="absolute start-3 bottom-3 z-10 rounded-lg border border-gray-700 bg-gray-900/90 px-3 py-2 backdrop-blur-xs"
     >
       <div class="h-2.5 w-36 rounded-full" :style="{ background: legendConfig.gradient }"></div>
       <div class="mt-1 flex justify-between text-[10px] text-gray-400">

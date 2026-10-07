@@ -5,7 +5,7 @@
  * License: AGPL-3.0
  */
 
-import Aura from '@primevue/themes/aura';
+import Aura from '@primeuix/themes/aura';
 import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts';
 import {
   DataZoomComponent,

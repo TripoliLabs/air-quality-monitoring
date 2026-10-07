@@ -121,7 +121,7 @@ edge/ · infra/ · deploy/   — gateway config, OpenTofu, runtime composition
 
 ### Prerequisites
 
-- **Node.js 24+** (LTS) and **pnpm 11+** — run `corepack enable` to activate the version pinned in `package.json`
+- **Node.js 24+** (LTS) and **pnpm 12+** — run `corepack enable` to activate the version pinned in `package.json`
 - **Docker** + Docker Compose (for the local backing stack)
 - **PlatformIO** (firmware only): `pip install platformio`
 

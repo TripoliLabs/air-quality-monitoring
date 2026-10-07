@@ -6,12 +6,7 @@
 import { calculateAQI } from '@mock/simulator';
 
 export type AqiCategory =
-  | 'good'
-  | 'moderate'
-  | 'unhealthySensitive'
-  | 'unhealthy'
-  | 'veryUnhealthy'
-  | 'hazardous';
+  'good' | 'moderate' | 'unhealthySensitive' | 'unhealthy' | 'veryUnhealthy' | 'hazardous';
 
 export function getAqiCategory(aqi: number): AqiCategory {
   if (aqi <= 50) return 'good';

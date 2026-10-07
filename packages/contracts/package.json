@@ -22,11 +22,11 @@
   },
   "dependencies": {
     "@aq/domain": "workspace:*",
-    "zod": "^4.0.0"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.9.0",
-    "vitest": "^2.1.0"
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
   }
 }
