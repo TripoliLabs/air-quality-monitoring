@@ -57,7 +57,7 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 
 **Runtime:** Node.js 24+ LTS (Krypton) — services run on Node, *not* the Bun runtime (ADR-003)
 **Language:** TypeScript 5.9+
-**Firmware:** C++ with ESP-IDF 5.x + PlatformIO (ESP32)
+**Firmware:** C++ with ESP-IDF 6.x + PlatformIO (ESP32)
 **Network Server:** ChirpStack v4 (self-hosted LoRaWAN network server)
 **Message Broker:** Mosquitto (self-hosted, dev + prod — internal glue for ChirpStack) *(migrating from the current NanoMQ; see [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md))*
 **Backend:** NestJS 11+ (modular Node.js framework)

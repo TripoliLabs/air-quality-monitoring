@@ -1,5 +1,5 @@
-# Managed component: pull RadioLib so the REAL LoRaWAN path (lora_esp32.cpp,
-# guarded by __has_include(<RadioLib.h>)) compiles under the idf.py build too,
-# not just the stub. Mirrors the PlatformIO lib_deps pin.
+# Managed component: RadioLib provides the LoRaWAN stack and its ESP-IDF HAL for
+# lora_esp32.cpp. This is the single version pin for both build routes
+# (PlatformIO and idf.py).
 dependencies:
-  jgromes/radiolib: "~6.6.0"
+  jgromes/radiolib: "~7.8.1"

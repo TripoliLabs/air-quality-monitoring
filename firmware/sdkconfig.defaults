@@ -1,2 +1,5 @@
 # Default sdkconfig for the air-quality node (LILYGO T-Beam V1.2, ESP32, 4 MB flash).
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# RadioLib 7.x's ESP-IDF HAL requires a 1 ms RTOS tick for accurate LoRaWAN RX-window timing.
+CONFIG_FREERTOS_HZ=1000

@@ -408,7 +408,7 @@ services:
   #   → firmware/build-esp32/aq-node.bin
   # ===========================================================================
   firmware-esp32:
-    image: espressif/idf:release-v5.2
+    image: espressif/idf:release-v6.1
     container_name: airquality-firmware-esp32
     profiles: ["firmware"]
     working_dir: /project

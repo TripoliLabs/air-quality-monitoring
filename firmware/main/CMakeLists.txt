@@ -1,12 +1,11 @@
-# The `main` component. Compiles the on-target entrypoint together with the
-# portable core (shared with the host build) and the ESP32 hardware adapters.
+# The `main` component — the single source list for both build routes
+# (PlatformIO: `pio run -e tbeam-v12`, and idf.py: scripts/firmware-esp32-build.sh).
+# Compiles the on-target entrypoint together with the portable core (shared with
+# the host build) and the ESP32 hardware adapters.
 #
-# lora_esp32.cpp uses RadioLib for the LoRaWAN stack, but is guarded with
-# `__has_include(<RadioLib.h>)`: if RadioLib is not present (this lean CMake /
-# `firmware-esp32-build.sh` build does not pull it by default) it compiles a stub
-# and the radio is a no-op. The supported real-LoRaWAN build is PlatformIO
-# (`pio run -e tbeam-v12`), where RadioLib comes from `lib_deps`. To enable real
-# LoRaWAN here too, add RadioLib as an ESP-IDF managed component (idf_component.yml).
+# lora_esp32.cpp uses RadioLib for the LoRaWAN stack. RadioLib is an ESP-IDF
+# managed component (idf_component.yml), so both routes compile the real radio
+# code; the `__has_include(<RadioLib.h>)` guard there only keeps a stub fallback.
 idf_component_register(
   SRCS
     "../src/main.cpp"
@@ -21,7 +20,8 @@ idf_component_register(
     "../core"
     "../adapters/esp32"
   REQUIRES
-    driver
+    esp_driver_i2c
+    esp_driver_uart
     esp_adc
     esp_timer
 )
