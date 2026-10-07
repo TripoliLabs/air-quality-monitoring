@@ -36,7 +36,7 @@ const textColor = computed(() => {
 
 <template>
   <span
-    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-semibold"
+    class="inline-flex items-center gap-1.5 rounded-full font-semibold whitespace-nowrap"
     :class="sizeClasses"
     :style="{ backgroundColor: color, color: textColor }"
   >

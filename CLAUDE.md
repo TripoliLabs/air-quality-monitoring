@@ -56,28 +56,28 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 ### Technology Stack
 
 **Runtime:** Node.js 24+ LTS (Krypton) — services run on Node, *not* the Bun runtime (ADR-003)
-**Language:** TypeScript 5.9+
+**Language:** TypeScript 6.0+ (7.x not yet supported by typescript-eslint, vue-tsc and @nestjs/swagger)
 **Firmware:** C++ with ESP-IDF 6.x + PlatformIO (ESP32)
 **Network Server:** ChirpStack v4 (self-hosted LoRaWAN network server)
 **Message Broker:** Mosquitto (self-hosted, dev + prod — internal glue for ChirpStack) *(migrating from the current NanoMQ; see [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md))*
-**Backend:** NestJS 11+ (modular Node.js framework)
+**Backend:** NestJS 11 (modular Node.js framework; 12 is blocked until nestjs-zod supports it)
 **Telemetry DB:** Self-hosted TimescaleDB, full TSL edition (compression, continuous aggregates, retention) — TigerData retired
-**Relational DB:** Self-hosted PostgreSQL 16 (app data + ChirpStack state)
+**Relational DB:** Self-hosted PostgreSQL 18 (app data + ChirpStack state)
 **DB access:** Drizzle ORM (both DBs; `--custom` SQL migrations for Timescale DDL) (ADR-001)
 **API contracts:** Zod 4 (shared package) + nestjs-zod → auto OpenAPI (ADR-002)
-**Cache/PubSub:** Redis 7.x (caching + Pub/Sub for real-time WebSocket broadcast)
-**Frontend:** Vue.js 3.5+ + Vite 7+ + Tailwind CSS
-**Maps:** MapLibre GL JS 4+ + OpenStreetMap tiles (open source, no API keys)
+**Cache/PubSub:** Redis 8.x (caching + Pub/Sub for real-time WebSocket broadcast)
+**Frontend:** Vue.js 3.5+ + Vite 8+ + Tailwind CSS 4
+**Maps:** MapLibre GL JS 6+ + OpenStreetMap tiles (open source, no API keys)
 **Charts:** Apache ECharts (better for real-time time-series data)
 **Observability:** OpenTelemetry → Grafana Alloy → **Grafana Cloud** (prod) · self-hosted LGTM stack local-only (dev)
 **Orchestration:** Docker Compose (local) · OpenTofu on **Hetzner Cloud** (staging + prod)
 
 ### Tooling
 
-**Package Manager:** pnpm 11+ (strict node_modules, catalogs, best-in-class Docker caching) (ADR-003)
+**Package Manager:** pnpm 12+ (strict node_modules, catalogs, best-in-class Docker caching) (ADR-003)
 **Monorepo:** Turborepo (task graph + caching)
 **Backend Linting:** Biome 2.5+ (Rust-based, type-aware lint + formatter, replaces ESLint + Prettier)
-**Frontend Linting:** ESLint 9+ with eslint-plugin-vue (only tool with real Vue template analysis)
+**Frontend Linting:** ESLint 10+ with eslint-plugin-vue (only tool with real Vue template analysis)
 **Frontend Formatting:** Prettier with prettier-plugin-tailwindcss
 **Git Hooks:** Lefthook (Go-based, fast parallel execution)
 **CI:** GitHub Actions (Turbo task caching; affected-graph filtering is a TODO)

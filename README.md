@@ -139,21 +139,21 @@ Lebanon faces severe air quality challenges from:
 | Component | Technology | Version | Why |
 |-----------|-----------|---------|-----|
 | **Runtime** | Node.js | 24+ LTS | Long-term support, stable for production |
-| **Package Manager** | pnpm | 11+ | Strict node_modules, catalogs, fast Docker caching |
+| **Package Manager** | pnpm | 12+ | Strict node_modules, catalogs, fast Docker caching |
 | **Monorepo** | Turborepo | - | Task graph + caching, affected-graph CI |
 | **Backend Linting** | Biome | 2.5+ | 30x faster than ESLint+Prettier, type-aware |
-| **Frontend Linting** | ESLint + Prettier | 9+ | Full Vue template support with eslint-plugin-vue |
-| **Firmware** | C++ + ESP-IDF | 5.x | Battery efficiency, ULP coprocessor support, proven at scale |
+| **Frontend Linting** | ESLint + Prettier | 10+ | Full Vue template support with eslint-plugin-vue |
+| **Firmware** | C++ + ESP-IDF | 6.x | Battery efficiency, ULP coprocessor support, proven at scale |
 | **Network Server** | ChirpStack | 4.x | Open source LoRaWAN, works offline |
 | **Message Broker** | Mosquitto (self-hosted) | 2.x | Internal glue for ChirpStack; same broker in dev + prod |
-| **Backend** | NestJS | 11+ | Type-safe, modular architecture, great DX |
-| **Language** | TypeScript | 5.9+ | Type safety, excellent tooling |
+| **Backend** | NestJS | 11 | Type-safe, modular architecture, great DX |
+| **Language** | TypeScript | 6.0+ | Type safety, excellent tooling |
 | **Telemetry DB** | TimescaleDB (self-hosted, full TSL) | 2.x | 100x compression, continuous aggregates, retention |
-| **Relational DB** | PostgreSQL (self-hosted) | 16 | App metadata + ChirpStack state |
-| **Cache** | Redis | 7.x | Sub-millisecond reads |
+| **Relational DB** | PostgreSQL (self-hosted) | 18 | App metadata + ChirpStack state |
+| **Cache** | Redis | 8.x | Sub-millisecond reads |
 | **Frontend** | Vue.js | 3.5+ | Lightweight, reactive, intuitive API |
-| **Build Tool** | Vite | 7+ | Fast HMR, optimized builds |
-| **Maps** | MapLibre GL JS | 4+ | Open source, no API keys, WebGL-accelerated |
+| **Build Tool** | Vite | 8+ | Fast HMR, optimized builds |
+| **Maps** | MapLibre GL JS | 6+ | Open source, no API keys, WebGL-accelerated |
 | **Observability** | OpenTelemetry + Grafana Alloy → Grafana Cloud | - | Off-box telemetry survives incidents; LGTM stack is local-only |
 | **Hosting** | Hetzner Cloud (self-hosted VMs) | - | ~$15–25/mo per box; staging (simulator) + prod (real hardware) |
 
@@ -202,7 +202,7 @@ air-quality-monitoring/
 - [PlatformIO](https://platformio.org/) (for firmware)
 - [Docker](https://www.docker.com/) (for services)
 - [Node.js 24+](https://nodejs.org/) (LTS runtime)
-- [pnpm 11+](https://pnpm.io/) (package manager — `corepack enable` activates it from the repo's `packageManager` field)
+- [pnpm 12+](https://pnpm.io/) (package manager — `corepack enable` activates it from the repo's `packageManager` field)
 
 ### Quick Start (Development)
 

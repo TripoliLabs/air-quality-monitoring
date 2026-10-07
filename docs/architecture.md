@@ -108,7 +108,7 @@ air-quality-monitoring/
 ├─ docs/                     # architecture (this file), ADRs, runbooks
 ├─ turbo.json                # task graph + caching
 ├─ pnpm-workspace.yaml       # workspace globs + catalogs (pinned shared versions)
-└─ package.json              # pnpm workspaces root ("packageManager": "pnpm@11.x")
+└─ package.json              # pnpm workspaces root ("packageManager": "pnpm@12.x")
 ```
 
 ### Why `apps/` vs `services/`
@@ -161,7 +161,7 @@ and the original repo had no contract at all between the two sides.
 
 ## 4. Technology decisions
 
-Stack inherited from the original design (Node 24, TypeScript 5.9, NestJS 11,
+Stack inherited from the original design (Node 24, TypeScript 6.0, NestJS 11,
 Vue 3.5, Redis, MapLibre, ECharts, ChirpStack, Lefthook) is retained. The
 data store, data-access layer, package manager/runtime, and linting were
 re-researched against the **June 2026** state of the ecosystem and are recorded
@@ -268,7 +268,7 @@ drift window; reserved strictly for external SDKs.
 
 ### ADR-003 — Package manager & runtime: **pnpm to install, Node to run**
 
-**Decision.** Use **pnpm 11.x** as the workspace/package manager, and run the
+**Decision.** Use **pnpm 12.x** as the workspace/package manager, and run the
 NestJS services on **Node.js LTS** — *not* the Bun runtime. **Bun** stays
 available as an optional fast test/script runner (`bun test` on `packages/*`).
 This **supersedes the original Bun-everywhere choice** in CLAUDE.md.
@@ -279,7 +279,7 @@ This **supersedes the original Bun-everywhere choice** in CLAUDE.md.
 **Why pnpm to install.** Mature strict, non-flat `node_modules` (phantom-
 dependency protection) ideal for shared `packages/*`; best-in-class Docker layer
 caching via `pnpm fetch`; first-class `turbo prune --docker`; catalogs to pin
-shared dep versions across all workspaces. Set `"packageManager": "pnpm@11.x"`
+shared dep versions across all workspaces. Set `"packageManager": "pnpm@12.x"`
 (Turborepo requires it); requires Node 22+.
 
 **Why Node to run.** Our exact stack hits the Bun runtime's 2026 soft spots:
@@ -301,7 +301,7 @@ ingestion service passes.
 - **Backend** (`apps/api`, `services/ingestion`, `packages/*`) → **Biome 2.5**
   (single binary, type-aware linting without `tsc`, its own formatter — no
   Prettier). Formats NestJS decorators fine.
-- **Frontend** (`apps/dashboard`, Vue 3 SFC + Tailwind) → **ESLint 9 +
+- **Frontend** (`apps/dashboard`, Vue 3 SFC + Tailwind) → **ESLint 10 +
   eslint-plugin-vue 10.9 + typescript-eslint 8 + Prettier 3.9** with
   `prettier-plugin-tailwindcss` for class sorting.
 
@@ -400,7 +400,7 @@ Incremental, not big-bang. The one working limb (the Vue frontend) stays alive
 throughout; valuable existing config is **moved into new homes, not deleted**.
 
 1. **Workspace skeleton + backbone packages.** Stand up pnpm workspaces + Turbo
-   (`"packageManager": "pnpm@11.x"`, `pnpm-workspace.yaml` with catalogs), then
+   (`"packageManager": "pnpm@12.x"`, `pnpm-workspace.yaml` with catalogs), then
    `packages/config`, `packages/domain`, `packages/contracts`. Everything leans
    on these.
 2. **Move the frontend** → `apps/dashboard/`, repoint it at `@aq/domain`

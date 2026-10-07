@@ -28,7 +28,10 @@ const methodColors: Record<string, string> = {
       class="flex w-full items-center gap-3 bg-gray-800/60 px-4 py-3 text-left transition hover:bg-gray-800"
       @click="expanded = !expanded"
     >
-      <span class="rounded px-2 py-0.5 text-xs font-bold text-white" :class="methodColors[method]">
+      <span
+        class="rounded-sm px-2 py-0.5 text-xs font-bold text-white"
+        :class="methodColors[method]"
+      >
         {{ method }}
       </span>
       <code class="flex-1 text-sm font-medium text-gray-200">{{ path }}</code>
@@ -46,9 +49,9 @@ const methodColors: Record<string, string> = {
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-gray-700 text-left text-xs text-gray-400">
-              <th class="pb-2 pr-4">{{ t('apiDocs.parameter') }}</th>
-              <th class="pb-2 pr-4">{{ t('apiDocs.type') }}</th>
-              <th class="pb-2 pr-4">{{ t('apiDocs.required') }}</th>
+              <th class="pr-4 pb-2">{{ t('apiDocs.parameter') }}</th>
+              <th class="pr-4 pb-2">{{ t('apiDocs.type') }}</th>
+              <th class="pr-4 pb-2">{{ t('apiDocs.required') }}</th>
               <th class="pb-2">{{ t('apiDocs.description') }}</th>
             </tr>
           </thead>

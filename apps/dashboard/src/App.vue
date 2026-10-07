@@ -137,7 +137,7 @@ const breadcrumbs = computed((): Breadcrumb[] => {
           <div class="flex items-center gap-3">
             <RouterLink to="/" class="flex items-center gap-3 transition-opacity hover:opacity-80">
               <div
-                class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-sky-500"
+                class="flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-sky-500"
               >
                 <svg
                   class="h-5 w-5 text-white"
@@ -332,12 +332,12 @@ const breadcrumbs = computed((): Breadcrumb[] => {
         <div class="grid grid-cols-1 gap-8 sm:grid-cols-3">
           <!-- Project column -->
           <div>
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <h3 class="text-xs font-semibold tracking-wider text-gray-400 uppercase">
               {{ t('footer.project') }}
             </h3>
             <div class="mt-3 flex items-center gap-2">
               <div
-                class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-sky-500"
+                class="flex h-7 w-7 items-center justify-center rounded-lg bg-linear-to-br from-emerald-400 to-sky-500"
               >
                 <svg
                   class="h-4 w-4 text-white"
@@ -367,7 +367,7 @@ const breadcrumbs = computed((): Breadcrumb[] => {
 
           <!-- Quick Links column -->
           <div>
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <h3 class="text-xs font-semibold tracking-wider text-gray-400 uppercase">
               {{ t('footer.quickLinks') }}
             </h3>
             <div class="mt-3 grid grid-cols-2 gap-x-6 gap-y-2">
@@ -412,7 +412,7 @@ const breadcrumbs = computed((): Breadcrumb[] => {
 
           <!-- Community column -->
           <div>
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <h3 class="text-xs font-semibold tracking-wider text-gray-400 uppercase">
               {{ t('footer.community') }}
             </h3>
             <ul class="mt-3 space-y-2">

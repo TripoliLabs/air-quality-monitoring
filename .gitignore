@@ -580,3 +580,6 @@ firmware/managed_components/
 # Tracked templates are .env.example.
 **/.env
 !**/.env.example
+
+# pnpm store when installing inside a container
+.pnpm-store/

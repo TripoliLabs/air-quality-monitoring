@@ -5,7 +5,7 @@
   "author": "TripoliLabs",
   "license": "AGPL-3.0",
   "private": true,
-  "packageManager": "pnpm@11.0.0",
+  "packageManager": "pnpm@12.9.1",
   "scripts": {
     "prepare": "lefthook install || true",
     "build": "turbo run build",
@@ -16,10 +16,10 @@
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.0",
-    "lefthook": "^1.6.0",
-    "turbo": "^2.5.0",
-    "typescript": "^5.9.0"
+    "@biomejs/biome": "^2.5.15",
+    "lefthook": "^2.1.17",
+    "turbo": "^2.11.7",
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=24.0.0"
