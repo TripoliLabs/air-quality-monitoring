@@ -64,9 +64,34 @@ pio device monitor
 A healthy first boot logs the PMU coming up, `initializing SX1276 radio`,
 `new OTAA join`, then `uplink sent`.
 
-## Not yet verified on hardware
+## Bench test without sensors
 
-The pin maps (radio, PMS7003 UART, I2C) and the PMU setup in `adapters/esp32/`
-follow the T-Beam V1.2 documentation but have not run on a physical board. The
-code assumes the SX1276 variant of the T-Beam; the SX1262 variant needs a
-different radio class and pin map.
+With no sensors wired the node has nothing to report, so it skips the uplink
+and never joins. To test the radio path alone, add this flag to
+`PLATFORMIO_BUILD_FLAGS`:
+
+```
+-DAQ_BENCH_SEND_WITHOUT_SENSORS
+```
+
+The node then joins and sends a payload with every sensor-presence bit clear.
+ChirpStack shows the join and the uplink; ingestion drops the reading as
+incomplete instead of storing zeros. Leave the flag out of field builds.
+
+## Flashing from WSL
+
+Pass the board's USB port into WSL with `usbipd` (from an administrator
+PowerShell: `usbipd bind --busid <id>` then `usbipd attach --wsl --busid <id>`).
+The link is unreliable at the default 921600 baud; flash with
+`PLATFORMIO_UPLOAD_SPEED=230400`.
+
+## Hardware verification status
+
+Verified on a LILYGO T-Beam V1.2 868 MHz (SX1276, AXP2101) against a Dragino
+DLOS8N gateway and ChirpStack: PMU bring-up, radio init on the default pin map,
+OTAA join, and an uplink on fPort 2 decoded by ingestion.
+
+Not yet verified on hardware: the PMS7003 UART and BME280 I2C drivers with real
+sensors attached, battery readings, deep-sleep current, and session restore
+across wake cycles. The SX1262 variant of the T-Beam needs a different radio
+class and pin map.
