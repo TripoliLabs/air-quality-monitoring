@@ -8,15 +8,14 @@
  * `lorawan_send_payload()` that main.cpp / core call.
  *
  * BUILD GUARD: the real implementation is compiled only when RadioLib's header
- * is on the include path (PlatformIO `lib_deps`, or an ESP-IDF managed
- * component). When it is NOT present — e.g. the lean `firmware-esp32-build.sh`
- * CMake build that only exercises core + sensors — the file falls back to a
- * stub that logs and returns an error, so neither build breaks. The supported
- * LoRaWAN build path is PlatformIO (`pio run -e tbeam-v12`).
+ * is on the include path. RadioLib is an ESP-IDF managed component
+ * (main/idf_component.yml), so both build routes — PlatformIO
+ * (`pio run -e tbeam-v12`) and idf.py (`scripts/firmware-esp32-build.sh`) —
+ * compile it. Without it the file falls back to a stub that logs and returns
+ * an error.
  *
- * !! HARDWARE VERIFICATION REQUIRED !!  Radio pin map, EU868 sub-band, and the
- * exact RadioLib LoRaWAN API (it has shifted across 6.x) must be verified
- * against the pinned RadioLib version and the physical board before flashing.
+ * !! HARDWARE VERIFICATION REQUIRED !!  Radio pin map and EU868 sub-band must
+ * be verified on the physical board before flashing.
  *
  * SECURITY: DevEUI / JoinEUI / AppKey / NwkKey are compile-time config and
  * default to clearly-fake all-zero placeholders. Real keys are injected at
@@ -62,8 +61,17 @@ extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len);
 #include <RadioLib.h>
 #include <string.h>
 
-#include "EspHal.h"
 #include "esp_attr.h" /* RTC_DATA_ATTR */
+
+/* RadioLib 7.x ships its own ESP-IDF HAL (EspHal, pulled in by RadioLib.h) — no
+ * vendored copy needed. SPI host wired to the SX1276 on the T-Beam (VSPI / SPI3
+ * on classic ESP32) and its clock — CONFIRM ON HARDWARE. */
+#ifndef AQ_LORA_SPI_HOST
+#define AQ_LORA_SPI_HOST SPI3_HOST
+#endif
+#ifndef AQ_LORA_SPI_HZ
+#define AQ_LORA_SPI_HZ (2 * 1000 * 1000)
+#endif
 
 /* SX1276 radio pin map for the T-Beam V1.x — CONFIRM ON HARDWARE. */
 #ifndef AQ_LORA_PIN_SCK
@@ -89,7 +97,8 @@ extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len);
 #endif
 
 /* HAL + radio + LoRaWAN node. Constructed once (static). */
-static EspHal s_hal(AQ_LORA_PIN_SCK, AQ_LORA_PIN_MISO, AQ_LORA_PIN_MOSI);
+static EspHal s_hal(AQ_LORA_PIN_SCK, AQ_LORA_PIN_MISO, AQ_LORA_PIN_MOSI, AQ_LORA_SPI_HOST,
+                    AQ_LORA_SPI_HZ);
 static SX1276 s_radio =
     new Module(&s_hal, AQ_LORA_PIN_CS, AQ_LORA_PIN_DIO0, AQ_LORA_PIN_RST, AQ_LORA_PIN_DIO1);
 static LoRaWANNode s_node(&s_radio, &EU868);
@@ -104,8 +113,8 @@ static LoRaWANNode s_node(&s_radio, &EU868);
  * few hundred bytes, well within budget.
  *
  * API NOTE: the getBufferNonces / getBufferSession (and setBuffer...) persistence
- * calls and the RADIOLIB_LORAWAN_..._BUF_SIZE sizes are the RadioLib 6.x LoRaWAN
- * API, matching the 6.6.0 pin. Verify against the pinned version before flashing. */
+ * calls and the RADIOLIB_LORAWAN_..._BUF_SIZE sizes are the RadioLib 7.x LoRaWAN
+ * API, matching the 7.8 pin in main/idf_component.yml. */
 RTC_DATA_ATTR static uint8_t s_nonces[RADIOLIB_LORAWAN_NONCES_BUF_SIZE];
 RTC_DATA_ATTR static uint8_t s_session[RADIOLIB_LORAWAN_SESSION_BUF_SIZE];
 RTC_DATA_ATTR static bool s_have_nonces = false;
@@ -187,7 +196,7 @@ extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len) {
     (void)data;
     ESP_LOGW(TAG,
              "LoRaWAN not compiled in (RadioLib absent) — dropping %u-byte uplink. "
-             "Build with PlatformIO (lib_deps RadioLib) for real transmission.",
+             "Add the RadioLib managed component (main/idf_component.yml) for real transmission.",
              len);
     return -1;
 }

@@ -9,7 +9,7 @@
 # Output: firmware/build-esp32/aq-node.bin (flash with: idf.py -B build-esp32 flash)
 set -euo pipefail
 
-IMAGE="${IDF_IMAGE:-espressif/idf:release-v5.2}"
+IMAGE="${IDF_IMAGE:-espressif/idf:release-v6.1}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Building ESP32 firmware with $IMAGE ..."
