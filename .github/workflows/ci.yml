@@ -87,6 +87,8 @@ jobs:
 
       - name: API integration tests
         run: pnpm --filter @aq/api run test:integration
+        env:
+          ADMIN_API_KEY: "dev-admin-key"
 
       - name: Ingestion integration tests
         run: pnpm --filter @aq/ingestion run test:integration

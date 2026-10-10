@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { OverviewModule } from './overview/overview.module';
@@ -19,6 +20,7 @@ import { SensorsModule } from './sensors/sensors.module';
         limit: Number(process.env.RATE_LIMIT_MAX ?? 300),
       },
     ]),
+    AuthModule,
     DatabaseModule,
     RedisModule,
     HealthModule,

@@ -1,12 +1,41 @@
-import type { HourlyBucket, ReadingResponse, Sensor } from '@aq/contracts';
-import { type RelationalDb, readings, sensors, type TelemetryDb } from '@aq/db';
-import { Controller, Get, Inject, NotFoundException, Param, Query } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { HourlyBucket, ReadingResponse, Sensor, SensorStatus } from '@aq/contracts';
+import { readings, type TelemetryDb } from '@aq/db';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
-import { RELATIONAL_DB, TELEMETRY_DB } from '../database/database.module';
-import { HourlyBucketDto, ReadingResponseDto, SensorDto } from '../dto';
+import { AdminOnly } from '../auth/admin.decorator';
+import { TELEMETRY_DB } from '../database/database.module';
+import {
+  CreateSensorDto,
+  HourlyBucketDto,
+  ReadingResponseDto,
+  SensorDto,
+  UpdateSensorDto,
+} from '../dto';
 import { REDIS } from '../redis/redis.module';
+import { SensorsService, type UnregisteredDevice } from './sensors.service';
 
 const LATEST_KEY = (deviceId: string): string => `sensor:latest:${deviceId}`;
 
@@ -14,25 +43,26 @@ const LATEST_KEY = (deviceId: string): string => `sensor:latest:${deviceId}`;
 @Controller('sensors')
 export class SensorsController {
   constructor(
-    @Inject(RELATIONAL_DB) private readonly relational: RelationalDb,
+    private readonly sensorsService: SensorsService,
     @Inject(TELEMETRY_DB) private readonly telemetry: TelemetryDb,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   @Get()
   @ApiOperation({ summary: 'List all sensors with their metadata' })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'maintenance', 'retired'] })
+  @ApiQuery({ name: 'includeSimulated', required: false, type: Boolean })
   @ApiOkResponse({ type: SensorDto, isArray: true })
-  async findAll(): Promise<Sensor[]> {
-    const rows = await this.relational.select().from(sensors);
-    return rows.map((r) => ({
-      id: r.id,
-      deviceId: r.deviceId,
-      name: r.name,
-      latitude: r.latitude,
-      longitude: r.longitude,
-      neighborhood: r.neighborhood ?? undefined,
-      isActive: r.isActive,
-    }));
+  async findAll(
+    @Query('status') status?: SensorStatus,
+    @Query('includeSimulated') includeSimulated?: string,
+  ): Promise<Sensor[]> {
+    const shouldIncludeSimulated =
+      includeSimulated !== undefined ? includeSimulated === 'true' : true;
+    return this.sensorsService.findAll({
+      status,
+      includeSimulated: shouldIncludeSimulated,
+    });
   }
 
   /** Latest reading for every sensor (bulk), served from the Redis cache. */
@@ -40,12 +70,61 @@ export class SensorsController {
   @ApiOperation({ summary: 'Latest reading for every sensor (bulk)' })
   @ApiOkResponse({ type: ReadingResponseDto, isArray: true })
   async latestAll(): Promise<ReadingResponse[]> {
-    const rows = await this.relational.select({ deviceId: sensors.deviceId }).from(sensors);
-    if (rows.length === 0) return [];
-    const cached = await this.redis.mget(rows.map((r) => LATEST_KEY(r.deviceId)));
+    const all = await this.sensorsService.findAll();
+    if (all.length === 0) return [];
+    const cached = await this.redis.mget(all.map((r) => LATEST_KEY(r.deviceId)));
     return cached
       .filter((v): v is string => v !== null)
       .map((v) => JSON.parse(v) as ReadingResponse);
+  }
+
+  /** Discover transmitting nodes in TimescaleDB that are not yet in the registry. */
+  @Get('unregistered')
+  @AdminOnly()
+  @ApiOperation({ summary: 'List transmitting DevEUIs not yet registered in the registry' })
+  @ApiOkResponse({ description: 'List of unregistered DevEUIs' })
+  async findUnregistered(): Promise<UnregisteredDevice[]> {
+    return this.sensorsService.findUnregistered();
+  }
+
+  /** Register a new physical or virtual sensor. */
+  @Post()
+  @AdminOnly()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new sensor' })
+  @ApiCreatedResponse({ type: SensorDto, description: 'Sensor registered successfully' })
+  @ApiConflictResponse({ description: 'Sensor with this deviceId already exists' })
+  async create(@Body() dto: CreateSensorDto): Promise<Sensor> {
+    return this.sensorsService.create(dto);
+  }
+
+  /** Get a single sensor's details by DevEUI. */
+  @Get(':deviceId')
+  @ApiOperation({ summary: 'Get sensor metadata by DevEUI' })
+  @ApiOkResponse({ type: SensorDto })
+  @ApiNotFoundResponse({ description: 'Sensor not found' })
+  async findOne(@Param('deviceId') deviceId: string): Promise<Sensor> {
+    return this.sensorsService.findByDeviceId(deviceId);
+  }
+
+  /** Update sensor metadata or status. */
+  @Patch(':deviceId')
+  @AdminOnly()
+  @ApiOperation({ summary: 'Update sensor metadata or status' })
+  @ApiOkResponse({ type: SensorDto, description: 'Sensor updated successfully' })
+  @ApiNotFoundResponse({ description: 'Sensor not found' })
+  async update(@Param('deviceId') deviceId: string, @Body() dto: UpdateSensorDto): Promise<Sensor> {
+    return this.sensorsService.update(deviceId, dto);
+  }
+
+  /** Retire a sensor (soft retirement: status = retired, isActive = false). */
+  @Delete(':deviceId')
+  @AdminOnly()
+  @ApiOperation({ summary: 'Retire a sensor from service' })
+  @ApiOkResponse({ type: SensorDto, description: 'Sensor retired' })
+  @ApiNotFoundResponse({ description: 'Sensor not found' })
+  async retire(@Param('deviceId') deviceId: string): Promise<Sensor> {
+    return this.sensorsService.retire(deviceId);
   }
 
   /** Raw time-series readings for a sensor over the last `hours` (default 24, max ~3 days). */
