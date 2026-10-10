@@ -10,6 +10,9 @@ import {
 
 /** Relational app data — lives on self-hosted PostgreSQL (see deployment-and-strategy.md). */
 
+export const sensorStatusEnum = ['active', 'maintenance', 'retired'] as const;
+export type SensorStatus = (typeof sensorStatusEnum)[number];
+
 export const sensors = pgTable('sensors', {
   id: uuid('id').primaryKey().defaultRandom(),
   deviceId: text('device_id').notNull().unique(),
@@ -18,7 +21,10 @@ export const sensors = pgTable('sensors', {
   latitude: doublePrecision('latitude').notNull(),
   longitude: doublePrecision('longitude').notNull(),
   neighborhood: text('neighborhood'),
+  status: text('status', { enum: sensorStatusEnum }).notNull().default('active'),
   isActive: boolean('is_active').notNull().default(true),
+  installedAt: timestamp('installed_at', { withTimezone: true }),
+  isSimulated: boolean('is_simulated').notNull().default(false),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   batteryMv: integer('battery_mv'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

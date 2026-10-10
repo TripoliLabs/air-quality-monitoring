@@ -298,6 +298,7 @@ services:
       TSDB_NAME: ${TSDB_NAME:-telemetry}
       REDIS_URL: redis://redis:6379
       MQTT_URL: mqtt://mqtt:1883
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       # OpenTelemetry: metrics are always exposed on :9464; set the OTLP endpoint
       # (e.g. http://tempo:4318) to also export traces — see the observability profile.
