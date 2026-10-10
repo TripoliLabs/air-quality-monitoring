@@ -45,6 +45,7 @@ async function bootstrap(): Promise<void> {
     .setTitle('Tripoli Air Quality API')
     .setDescription('Public REST API for the Tripoli air-quality monitoring network')
     .setVersion('1.0')
+    .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'admin-api-key')
     .build();
   const document = cleanupOpenApiDoc(SwaggerModule.createDocument(app, config));
   SwaggerModule.setup('docs', app, document);
