@@ -4,6 +4,8 @@ export interface SortState<K extends string> {
   key: Ref<K>;
   descending: Ref<boolean>;
   toggle: (key: K) => void;
+  /** Sort by `key` in a given direction (for controls that are not column headers). */
+  set: (key: K, descending: boolean) => void;
   ariaSort: (key: K) => 'ascending' | 'descending' | 'none';
 }
 
@@ -42,8 +44,13 @@ export function useSort<T, K extends string>(
     }
   }
 
+  function set(next: K, isDescending: boolean): void {
+    key.value = next;
+    descending.value = isDescending;
+  }
+
   const ariaSort = (k: K): 'ascending' | 'descending' | 'none' =>
     key.value !== k ? 'none' : descending.value ? 'descending' : 'ascending';
 
-  return { key, descending, sorted, toggle, ariaSort };
+  return { key, descending, sorted, toggle, set, ariaSort };
 }

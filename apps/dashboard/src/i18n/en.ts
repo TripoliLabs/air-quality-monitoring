@@ -124,6 +124,8 @@ export default {
     count: '{count} sensor | {count} sensors',
     reporting: '{online} of {total} reporting',
     sortBy: 'Sort by {column}',
+    sortAscending: 'Sort lowest first',
+    sortDescending: 'Sort highest first',
     showAll: 'Show all {count} sensors',
     unassigned: 'No neighborhood',
   },

@@ -38,6 +38,9 @@ class FakeService implements SensorService {
     reading(id, 35, NOW - 300_000),
   ]);
   getHourly = vi.fn(async () => []);
+  /** How far the server's clock is ahead of this device's. */
+  serverAhead = 0;
+  getServerTime = vi.fn(async () => Date.now() + this.serverAhead);
   getNetworkHourly = vi.fn(async (_days: number, neighborhood?: string) => [
     {
       time: NOW - 3_600_000,
@@ -202,5 +205,68 @@ describe('air store', () => {
     await vi.advanceTimersByTimeAsync(5 * 60_000 + 1000);
     expect(fake.getNetworkHourly.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(store.citySeries.days).toBe(1);
+  });
+
+  it('judges "online" by the server clock, so a wrong device clock changes nothing', async () => {
+    // This device's clock is 40 minutes behind the server's.
+    fake.serverAhead = 40 * 60_000;
+    fake.latest = [reading('a', 40, NOW + 40 * 60_000), reading('b', 80, NOW + 40 * 60_000)];
+    const store = await startStore();
+    expect(store.city.online).toBe(2);
+
+    // And the other way: 40 minutes ahead must not keep stale sensors online.
+    setActivePinia(createPinia());
+    fake = new FakeService();
+    fake.serverAhead = -40 * 60_000;
+    fake.latest = [reading('a', 40, NOW - 40 * 60_000 - 20 * 60_000)];
+    const { useAirStore } = await import('../src/stores/air');
+    const second = useAirStore();
+    await second.start();
+    expect(second.getRow('a')?.status).toBe('offline');
+  });
+
+  it('asks about an unregistered device once, not on every reading', async () => {
+    const store = await startStore();
+    for (let i = 1; i <= 5; i++) {
+      fake.handlers?.onReading(reading('ghost', 90, NOW + i * 1000));
+      await vi.advanceTimersByTimeAsync(3_000);
+    }
+    expect(fake.getSensors).toHaveBeenCalledTimes(2); // the initial load, then one look
+    expect(store.getRow('ghost')).toBeUndefined();
+  });
+
+  it('keeps the wider range when history requests overlap', async () => {
+    const store = await startStore();
+    let releaseWeek: (() => void) | undefined;
+    fake.getNetworkHourly.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseWeek = () => resolve([]))),
+    );
+    const week = store.loadCitySeries(7);
+    await vi.advanceTimersByTimeAsync(0);
+    const month = store.loadCitySeries(30); // asked for before the first answered
+    await month;
+    expect(store.citySeries.days).toBe(30);
+    expect(store.citySeriesLoading).toBe(true);
+    releaseWeek?.();
+    await week;
+    expect(store.citySeries.days).toBe(30);
+    expect(store.citySeriesLoading).toBe(false);
+  });
+
+  it('leaves the loading state when a history request fails', async () => {
+    const store = await startStore();
+    fake.getNetworkHourly.mockRejectedValueOnce(new Error('503'));
+    await store.loadCitySeries(7);
+    expect(store.citySeries.days).toBe(7);
+    expect(store.citySeries.points).toEqual([]);
+    expect(store.citySeriesLoading).toBe(false);
+  });
+
+  it('does not lose live readings that arrive while a history request is in flight', async () => {
+    const store = await startStore();
+    await store.loadReadings('a', 24);
+    fake.handlers?.onReading(reading('a', 55, NOW + 5_000));
+    await store.loadReadings('a', 24); // the response predates the live reading
+    expect(store.rawHistory.a.readings.map((r) => r.aqi)).toEqual([30, 35, 55]);
   });
 });

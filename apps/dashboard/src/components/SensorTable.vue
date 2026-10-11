@@ -58,7 +58,7 @@ const filtered = computed(() => {
 });
 
 const STATUS_ORDER = { offline: 0, inactive: 1, online: 2 } as const;
-const { sorted, key, descending, toggle, ariaSort } = useSort<SensorRow, SortKey>(
+const { sorted, key, descending, toggle, set, ariaSort } = useSort<SensorRow, SortKey>(
   () => filtered.value,
   {
     name: (r) => sensorName(r.sensor),
@@ -76,6 +76,9 @@ const { sorted, key, descending, toggle, ariaSort } = useSort<SensorRow, SortKey
   props.variant === 'air' ? 'aqi' : 'status',
   props.variant === 'air',
 );
+
+/** Columns where the reader wants the highest value first (the worst air, the newest reading). */
+const HIGH_FIRST: readonly SortKey[] = ['aqi', 'pm25', 'pm10', 'temperature', 'humidity', 'seen'];
 
 interface Column {
   key: SortKey;
@@ -142,18 +145,34 @@ function open(row: SensorRow): void {
       </label>
 
       <!-- Sorting on a phone, where there are no column headers to press. -->
-      <label class="max-sm:basis-full md:hidden">
-        <span class="sr-only">{{ t('sensors.sortBy', { column: '' }) }}</span>
-        <select
-          :value="key"
-          class="h-11 w-full rounded-control border bg-surface px-3 text-sm"
-          @change="toggle(($event.target as HTMLSelectElement).value as SortKey)"
+      <div class="flex gap-2 max-sm:basis-full md:hidden">
+        <label class="min-w-0 flex-1">
+          <span class="sr-only">{{ t('sensors.sortBy', { column: '' }) }}</span>
+          <select
+            :value="key"
+            class="h-11 w-full rounded-control border bg-surface px-3 text-sm"
+            @change="
+              set(
+                ($event.target as HTMLSelectElement).value as SortKey,
+                HIGH_FIRST.includes(($event.target as HTMLSelectElement).value as SortKey),
+              )
+            "
+          >
+            <option v-for="column in columns" :key="column.key" :value="column.key">
+              {{ t('sensors.sortBy', { column: column.label }) }}
+            </option>
+          </select>
+        </label>
+        <button
+          type="button"
+          class="flex size-11 shrink-0 items-center justify-center rounded-control border bg-surface"
+          :aria-label="descending ? t('sensors.sortAscending') : t('sensors.sortDescending')"
+          :title="descending ? t('sensors.sortAscending') : t('sensors.sortDescending')"
+          @click="set(key, !descending)"
         >
-          <option v-for="column in columns" :key="column.key" :value="column.key">
-            {{ t('sensors.sortBy', { column: column.label }) }}
-          </option>
-        </select>
-      </label>
+          <AppIcon name="chevron" :class="descending ? 'rotate-90' : '-rotate-90'" />
+        </button>
+      </div>
     </div>
 
     <p v-if="sorted.length === 0" class="py-8 text-center text-sm text-ink-2">

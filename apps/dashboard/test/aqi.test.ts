@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { AQI_CATEGORIES, AQI_UNKNOWN, aqiCategory, pm25ToAqi } from '../src/lib/aqi';
+// The server's implementation, imported from source: the dashboard's copy must agree with it.
+import { calculateAqi } from '../../../packages/domain/src/aqi';
+import {
+  AQI_CATEGORIES,
+  AQI_UNKNOWN,
+  aqiCategory,
+  particlesToAqi,
+  pm25ToAqi,
+} from '../src/lib/aqi';
 
 /** WCAG 2 relative luminance and contrast ratio. */
 function luminance(hex: string): number {
@@ -133,5 +141,30 @@ describe('pm25ToAqi', () => {
 
   it('treats a negative reading as zero', () => {
     expect(pm25ToAqi(-3)).toBe(0);
+  });
+});
+
+describe('AQI calculation matches the server', () => {
+  it('gives the same index as @aq/domain across the whole range of both particles', () => {
+    const pm25Values = [
+      0, 4.5, 9.0, 9.05, 9.09, 9.1, 12, 35.4, 35.45, 35.5, 55.4, 55.5, 90, 125.4, 125.5, 200, 225.5,
+      325.4, 400, 6553.5,
+    ];
+    const pm10Values = [
+      0, 20, 54, 54.9, 55, 100, 154, 155, 254, 255, 300, 354, 355, 424, 425, 604, 900,
+    ];
+    for (const pm25 of pm25Values) {
+      for (const pm10 of pm10Values) {
+        expect(particlesToAqi(pm25, pm10), `pm25=${pm25} pm10=${pm10}`).toBe(
+          calculateAqi(pm25, pm10).aqi,
+        );
+      }
+    }
+  });
+
+  it('lets coarse dust set the index when it is the worse of the two', () => {
+    // A dust event: little smoke, a lot of dust.
+    expect(particlesToAqi(30, 300)).toBe(calculateAqi(30, 300).aqi);
+    expect(particlesToAqi(30, 300)).toBeGreaterThan(pm25ToAqi(30));
   });
 });

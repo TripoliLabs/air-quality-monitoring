@@ -117,29 +117,57 @@ export function aqiText(aqi: number | null | undefined, theme: Theme): string {
 }
 
 /**
- * US EPA PM2.5 breakpoints (2024 revision), the same table the server uses in
- * packages/domain. The server computes the AQI of every reading; this is only
- * for values the dashboard derives itself, such as the AQI of an hourly average.
+ * US EPA breakpoints, the same tables and rules as the server (packages/domain;
+ * test/aqi.test.ts checks the two agree). The server computes the AQI of every
+ * reading. This is for values the dashboard derives itself, such as the AQI of
+ * an hourly average, so that history and live figures are on the same scale.
  */
-const PM25_BREAKPOINTS = [
+interface Breakpoint {
+  cLow: number;
+  cHigh: number;
+  iLow: number;
+  iHigh: number;
+}
+
+// PM2.5 per the 2024 revision (Good ends at 9.0 µg/m³).
+const PM25_BREAKPOINTS: Breakpoint[] = [
   { cLow: 0, cHigh: 9.0, iLow: 0, iHigh: 50 },
   { cLow: 9.1, cHigh: 35.4, iLow: 51, iHigh: 100 },
   { cLow: 35.5, cHigh: 55.4, iLow: 101, iHigh: 150 },
   { cLow: 55.5, cHigh: 125.4, iLow: 151, iHigh: 200 },
   { cLow: 125.5, cHigh: 225.4, iLow: 201, iHigh: 300 },
   { cLow: 225.5, cHigh: 325.4, iLow: 301, iHigh: 500 },
-] as const;
+];
 
+const PM10_BREAKPOINTS: Breakpoint[] = [
+  { cLow: 0, cHigh: 54, iLow: 0, iHigh: 50 },
+  { cLow: 55, cHigh: 154, iLow: 51, iHigh: 100 },
+  { cLow: 155, cHigh: 254, iLow: 101, iHigh: 150 },
+  { cLow: 255, cHigh: 354, iLow: 151, iHigh: 200 },
+  { cLow: 355, cHigh: 424, iLow: 201, iHigh: 300 },
+  { cLow: 425, cHigh: 604, iLow: 301, iHigh: 500 },
+];
+
+function subIndex(concentration: number, breakpoints: Breakpoint[]): number {
+  const bp =
+    breakpoints.find((b) => concentration <= b.cHigh) ?? breakpoints[breakpoints.length - 1];
+  // Clamp into the band: values between two bands take the upper band's floor,
+  // and values above the top band cap at 500.
+  const c = Math.min(Math.max(concentration, bp.cLow), bp.cHigh);
+  return Math.round(((bp.iHigh - bp.iLow) / (bp.cHigh - bp.cLow)) * (c - bp.cLow) + bp.iLow);
+}
+
+/** AQI sub-index of a PM2.5 concentration (truncated to 0.1 µg/m³, as the EPA specifies). */
 export function pm25ToAqi(pm25: number): number {
-  const c = Math.max(0, pm25);
-  for (const bp of PM25_BREAKPOINTS) {
-    if (c <= bp.cHigh) {
-      const low = Math.min(c, bp.cHigh);
-      return Math.round(
-        ((bp.iHigh - bp.iLow) / (bp.cHigh - bp.cLow)) * (Math.max(low, bp.cLow) - bp.cLow) +
-          bp.iLow,
-      );
-    }
-  }
-  return 500;
+  return subIndex(Math.floor(Math.max(0, pm25) * 10) / 10, PM25_BREAKPOINTS);
+}
+
+/** AQI sub-index of a PM10 concentration (truncated to 1 µg/m³). */
+export function pm10ToAqi(pm10: number): number {
+  return subIndex(Math.floor(Math.max(0, pm10)), PM10_BREAKPOINTS);
+}
+
+/** The overall AQI: the worse of the two particle sub-indices. */
+export function particlesToAqi(pm25: number, pm10: number): number {
+  return Math.max(pm25ToAqi(pm25), pm10ToAqi(pm10));
 }

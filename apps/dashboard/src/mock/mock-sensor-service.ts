@@ -69,6 +69,10 @@ export class MockSensorService implements SensorService {
       });
   }
 
+  async getServerTime(): Promise<number> {
+    return Date.now();
+  }
+
   subscribe({ onReading, onConnection }: RealtimeHandlers): () => void {
     const reporting = MOCK_SENSORS.filter((s) => s.silentForMs === undefined);
     const connect = setTimeout(() => onConnection(true), 300);

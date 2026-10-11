@@ -178,6 +178,13 @@ export class HttpSensorService implements SensorService {
     }));
   }
 
+  async getServerTime(): Promise<number> {
+    const { updatedAt } = await this.get<{ updatedAt: string }>('/overview');
+    const time = Date.parse(updatedAt);
+    if (Number.isNaN(time)) throw new ApiError('The server did not report its time');
+    return time;
+  }
+
   subscribe({ onReading, onConnection }: RealtimeHandlers): () => void {
     // Socket.IO reconnects on its own with backoff; the store falls back to
     // polling while the channel is down.

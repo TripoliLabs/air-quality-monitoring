@@ -37,9 +37,9 @@ watch(
 const trend = computed(() => {
   if (!place.value) return [];
   const series = toSeries(store.placeSeries[place.value.id]?.points ?? [], now.value - 24 * HOUR);
-  const { aqi, pm25, online } = place.value;
-  if (series.length && aqi !== null && pm25 !== null) {
-    series.push({ time: now.value, pm25, aqi, sensors: online });
+  const { aqi, pm25, pm10, online } = place.value;
+  if (series.length && aqi !== null && pm25 !== null && pm10 !== null) {
+    series.push({ time: now.value, pm25, pm10, aqi, sensors: online });
   }
   return series;
 });

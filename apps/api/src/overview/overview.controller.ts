@@ -10,6 +10,18 @@ import { REDIS } from '../redis/redis.module';
 
 const ONLINE_WINDOW_MS = 15 * 60 * 1000;
 
+/**
+ * Neighbourhood names are free text, typed by whoever registered the sensor.
+ * Compare them ignoring case, spacing and punctuation ("El Mina", "el-mina ",
+ * "EL MINA" are one place), the way the dashboard groups them.
+ */
+const placeKey = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-|-$/g, '');
+
 @ApiTags('overview')
 @Controller('overview')
 export class OverviewController {
@@ -58,6 +70,7 @@ export class OverviewController {
   /**
    * Hour-bucketed history for the whole network, or for one neighbourhood —
    * one request where a client would otherwise fetch every sensor's history.
+   * Covers registered, active sensors only.
    * Each bucket is the mean of the per-sensor hourly averages in
    * `readings_hourly`, so a sensor counts once however often it sampled.
    * Default 7 days, max 90. Chronological.
@@ -70,7 +83,8 @@ export class OverviewController {
   @ApiQuery({
     name: 'neighborhood',
     required: false,
-    description: 'Restrict to sensors in this neighbourhood (exact name, as in GET /sensors)',
+    description:
+      'Restrict to sensors in this neighbourhood (name as in GET /sensors; case, spacing and punctuation are ignored)',
   })
   @ApiOkResponse({ type: NetworkHourlyBucketDto, isArray: true })
   async history(
@@ -79,23 +93,24 @@ export class OverviewController {
   ): Promise<NetworkHourlyBucket[]> {
     const windowDays = Math.min(Math.max(Number(days) || 7, 1), 90);
 
-    // Neighbourhoods live in the relational DB, readings in TimescaleDB; the
-    // two cannot join, so resolve the neighbourhood to device IDs first.
-    let deviceIds: string[] | null = null;
-    if (neighborhood) {
-      const rows = await this.relational
-        .select({ deviceId: sensors.deviceId })
-        .from(sensors)
-        .where(eq(sensors.neighborhood, neighborhood));
-      if (rows.length === 0) return [];
-      deviceIds = rows.map((r) => r.deviceId);
-    }
-    const inScope = deviceIds
-      ? sql`AND sensor_id IN (${sql.join(
-          deviceIds.map((id) => sql`${id}`),
-          sql`, `,
-        )})`
-      : sql``;
+    // Only registered, active sensors count — the same set the live figures
+    // use — so a retired unit that still transmits, or a device that is in
+    // ChirpStack but not registered, cannot skew the history. Sensor metadata
+    // is in the relational DB and readings in TimescaleDB; the two cannot
+    // join, so resolve the device IDs first.
+    const active = await this.relational
+      .select({ deviceId: sensors.deviceId, neighborhood: sensors.neighborhood })
+      .from(sensors)
+      .where(eq(sensors.isActive, true));
+    const wanted = neighborhood ? placeKey(neighborhood) : null;
+    const deviceIds = active
+      .filter((r) => wanted === null || (r.neighborhood && placeKey(r.neighborhood) === wanted))
+      .map((r) => r.deviceId);
+    if (deviceIds.length === 0) return [];
+    const inScope = sql`AND sensor_id IN (${sql.join(
+      deviceIds.map((id) => sql`${id}`),
+      sql`, `,
+    )})`;
 
     const result = await this.telemetry.execute(sql`
       SELECT bucket,

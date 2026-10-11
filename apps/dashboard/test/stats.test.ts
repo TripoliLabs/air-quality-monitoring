@@ -105,9 +105,12 @@ describe('network history', () => {
   const points = [point(30, 500), point(2, 9), point(1, 35.4, 2)];
 
   it('turns hourly averages into an AQI series within the window', () => {
-    expect(toSeries(points, NOW - 24 * HOUR).map((p) => [p.pm25, p.aqi, p.sensors])).toEqual([
-      [9, 50, 3],
-      [35.4, 100, 2],
+    // pm10 is twice pm25 here, well inside the same band, so PM2.5 sets the index.
+    expect(
+      toSeries(points, NOW - 24 * HOUR).map((p) => [p.pm25, p.pm10, p.aqi, p.sensors]),
+    ).toEqual([
+      [9, 18, 50, 3],
+      [35.4, 70.8, 100, 2],
     ]);
     expect(toSeries(points)).toHaveLength(3);
   });

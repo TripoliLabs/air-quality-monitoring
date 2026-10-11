@@ -127,6 +127,8 @@ export default {
     count: 'عدد المستشعرات: {count}',
     reporting: 'يعمل {online} من {total}',
     sortBy: 'ترتيب حسب {column}',
+    sortAscending: 'ترتيب من الأدنى',
+    sortDescending: 'ترتيب من الأعلى',
     showAll: 'عرض كل المستشعرات ({count})',
     unassigned: 'بلا حي',
   },

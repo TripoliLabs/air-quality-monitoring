@@ -44,7 +44,11 @@ const metricOptions = computed(() =>
   METRIC_ORDER.map((value) => ({ value, label: t(`metrics.${value}.short`) })),
 );
 
+let historyRequest = 0;
 async function loadHistory(): Promise<void> {
+  // Only the most recent request may end the loading state: the reader can
+  // change range or sensor again before an earlier request has answered.
+  const request = ++historyRequest;
   historyLoading.value = true;
   try {
     // The last day is shown reading by reading and keeps growing live; longer
@@ -54,7 +58,7 @@ async function loadHistory(): Promise<void> {
   } catch {
     // The chart shows its empty state; the live values above are unaffected.
   } finally {
-    historyLoading.value = false;
+    if (request === historyRequest) historyLoading.value = false;
   }
 }
 watch([sensorId, range], loadHistory, { immediate: true });
@@ -67,9 +71,8 @@ const points = computed((): ChartPoint[] => {
       return value === undefined ? [] : [{ time: r.time, value }];
     });
   }
-  const history = store.hourlyHistory[sensorId.value];
-  if (!history || history.days !== RANGE_HOURS[range.value] / 24) return [];
-  return history.points.map((p) => ({ time: p.time, value: def.hourly(p) }));
+  const history = store.getHourly(sensorId.value, RANGE_HOURS[range.value] / 24) ?? [];
+  return history.map((p) => ({ time: p.time, value: def.hourly(p) }));
 });
 
 const battery = computed(() => {
@@ -167,7 +170,7 @@ const battery = computed(() => {
             />
           </div>
         </div>
-        <div v-if="historyLoading && points.length === 0" class="skeleton h-64 sm:h-80" />
+        <div v-if="historyLoading && points.length < 2" class="skeleton h-64 sm:h-80" />
         <p
           v-else-if="points.length < 2"
           class="flex h-64 items-center justify-center text-sm text-ink-2 sm:h-80"

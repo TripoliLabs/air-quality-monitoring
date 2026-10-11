@@ -27,6 +27,8 @@ export interface SensorService {
    * With `neighborhood` (the name as the source spells it), only its sensors.
    */
   getNetworkHourly(days: number, neighborhood?: string): Promise<NetworkHourlyPoint[]>;
+  /** The data source's current time, epoch milliseconds. */
+  getServerTime(): Promise<number>;
   /** Stream live readings. Returns a function that stops the stream. */
   subscribe(handlers: RealtimeHandlers): () => void;
 }

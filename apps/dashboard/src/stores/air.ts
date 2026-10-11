@@ -52,11 +52,6 @@ interface NetworkSeries {
   points: NetworkHourlyPoint[];
 }
 
-interface HourlyHistory {
-  days: number;
-  points: HourlyPoint[];
-}
-
 export const useAirStore = defineStore('air', () => {
   const sensors = shallowRef<Sensor[]>([]);
   const latest = reactive<Record<string, Reading>>({});
@@ -64,13 +59,20 @@ export const useAirStore = defineStore('air', () => {
   const connection = ref<ConnectionState>('connecting');
   const ready = ref(false);
   const error = ref<string | null>(null);
-  /** Coarse clock that drives "online" status; ticks even when no data arrives. */
+  /**
+   * Coarse clock that drives "online" status; ticks even when no data arrives.
+   * It runs on the server's time, not the device's: reading timestamps come from
+   * the server, and a phone whose clock is wrong would otherwise show the whole
+   * network as offline (or keep dead sensors online).
+   */
+  let clockOffset = 0;
+  const serverNow = (): number => Date.now() + clockOffset;
   const now = ref(Date.now());
   /** The reading that most recently arrived live, for the map's ripple. */
   const lastLive = shallowRef<Reading | null>(null);
 
   const rawHistory = reactive<Record<string, RawHistory>>({});
-  const hourlyHistory = reactive<Record<string, HourlyHistory>>({});
+  const hourlyHistory = reactive<Record<string, HourlyPoint[]>>({});
   /** Hourly history of the whole network, loaded on demand. */
   const citySeries = shallowRef<NetworkSeries>({ days: 0, points: [] });
   const citySeriesLoading = ref(false);
@@ -83,6 +85,8 @@ export const useAirStore = defineStore('air', () => {
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let pollDelay: ReturnType<typeof setTimeout> | null = null;
   let refreshQueued: ReturnType<typeof setTimeout> | null = null;
+  /** Devices that report but are not in the sensor list; rechecked on the periodic refresh. */
+  const unknownDevices = new Set<string>();
   const timers: ReturnType<typeof setInterval>[] = [];
 
   // --- derived --------------------------------------------------------------
@@ -101,8 +105,14 @@ export const useAirStore = defineStore('air', () => {
   const cityTrend = computed((): SeriesPoint[] => {
     const series = toSeries(citySeries.value.points, now.value - 24 * HOUR);
     const live = city.value;
-    if (live.aqi !== null && live.pm25 !== null && series.length) {
-      series.push({ time: now.value, pm25: live.pm25, aqi: live.aqi, sensors: live.online });
+    if (live.aqi !== null && live.pm25 !== null && live.pm10 !== null && series.length) {
+      series.push({
+        time: now.value,
+        pm25: live.pm25,
+        pm10: live.pm10,
+        aqi: live.aqi,
+        sensors: live.online,
+      });
     }
     return series;
   });
@@ -121,7 +131,7 @@ export const useAirStore = defineStore('air', () => {
 
     if (!live) return;
     lastLive.value = reading;
-    now.value = Math.max(now.value, Date.now());
+    now.value = Math.max(now.value, serverNow());
 
     const history = rawHistory[reading.sensorId];
     if (history) {
@@ -130,9 +140,13 @@ export const useAirStore = defineStore('air', () => {
       while (history.readings.length && history.readings[0].time < cutoff) history.readings.shift();
     }
 
-    // A sensor we have never heard of: it was registered after the page loaded.
-    if (!rowById.value.has(reading.sensorId) && !refreshQueued) {
-      refreshQueued = setTimeout(() => {
+    // A sensor we have never heard of: it may have been registered after the
+    // page loaded, so look once. A device that is still unknown after that
+    // (in ChirpStack but not registered) is not asked about again on every
+    // uplink; the periodic refresh picks it up if it is registered later.
+    if (!rowById.value.has(reading.sensorId) && !unknownDevices.has(reading.sensorId)) {
+      unknownDevices.add(reading.sensorId);
+      refreshQueued ??= setTimeout(() => {
         refreshQueued = null;
         void refreshSensors();
       }, 2_000);
@@ -148,11 +162,23 @@ export const useAirStore = defineStore('air', () => {
     }
   }
 
+  async function syncClock(): Promise<void> {
+    if (!service) return;
+    try {
+      const sent = Date.now();
+      const server = await service.getServerTime();
+      // Assume the answer was stamped half-way through the round trip.
+      clockOffset = server - (sent + Date.now()) / 2;
+    } catch {
+      // Keep the offset we have (zero until the first success).
+    }
+  }
+
   async function syncLatest(): Promise<void> {
     if (!service) return;
     const readings = await service.getLatest();
     for (const reading of readings) applyReading(reading, false);
-    now.value = Date.now();
+    now.value = serverNow();
   }
 
   // --- connection -----------------------------------------------------------
@@ -195,7 +221,7 @@ export const useAirStore = defineStore('air', () => {
 
   function onVisible(): void {
     if (document.visibilityState !== 'visible' || !ready.value) return;
-    now.value = Date.now();
+    now.value = serverNow();
     void syncLatest().catch(() => undefined);
   }
 
@@ -206,10 +232,14 @@ export const useAirStore = defineStore('air', () => {
     try {
       service ??= await createSensorService();
       source.value = service.kind;
-      const [sensorList, readings] = await Promise.all([service.getSensors(), service.getLatest()]);
+      const [sensorList, readings] = await Promise.all([
+        service.getSensors(),
+        service.getLatest(),
+        syncClock(),
+      ]);
       sensors.value = sensorList;
       for (const reading of readings) applyReading(reading, false);
-      now.value = Date.now();
+      now.value = serverNow();
       ready.value = true;
 
       stopRealtime ??= service.subscribe({
@@ -217,10 +247,12 @@ export const useAirStore = defineStore('air', () => {
         onConnection,
       });
       if (timers.length === 0) {
-        timers.push(setInterval(() => (now.value = Date.now()), CLOCK_MS));
+        timers.push(setInterval(() => (now.value = serverNow()), CLOCK_MS));
         timers.push(
           setInterval(() => {
+            unknownDevices.clear();
             void refreshSensors();
+            void syncClock();
             refreshSeries();
           }, SENSOR_REFRESH_MS),
         );
@@ -258,15 +290,23 @@ export const useAirStore = defineStore('air', () => {
     await start();
     if (!service) return;
     const readings = await service.getReadings(sensorId, hours);
-    rawHistory[sensorId] = { hours, readings };
+    // Live readings may have been appended while the request was in flight.
+    const last = readings[readings.length - 1]?.time ?? 0;
+    const arrived = rawHistory[sensorId]?.readings.filter((r) => r.time > last) ?? [];
+    rawHistory[sensorId] = { hours, readings: [...readings, ...arrived] };
   }
+
+  /** Cached per sensor and range, so overlapping requests cannot overwrite each other. */
+  const hourlyKey = (sensorId: string, days: number): string => `${sensorId}:${days}`;
 
   async function loadHourly(sensorId: string, days: number): Promise<void> {
     await start();
     if (!service) return;
-    const points = await service.getHourly(sensorId, days);
-    hourlyHistory[sensorId] = { days, points };
+    hourlyHistory[hourlyKey(sensorId, days)] = await service.getHourly(sensorId, days);
   }
+
+  const getHourly = (sensorId: string, days: number): HourlyPoint[] | undefined =>
+    hourlyHistory[hourlyKey(sensorId, days)];
 
   /** History straight from the source, uncached — for exports. */
   async function fetchReadings(sensorId: string, hours: number): Promise<Reading[]> {
@@ -279,17 +319,28 @@ export const useAirStore = defineStore('air', () => {
     return service ? service.getHourly(sensorId, days) : [];
   }
 
-  /** Makes sure the network-wide hourly history covers at least `days`. */
+  /**
+   * Makes sure the network-wide hourly history covers at least `days`.
+   * Requests may overlap (a second range picked before the first answered): the
+   * widest answer wins, and `citySeriesLoading` is true while any is pending.
+   * A failed request still records the range it was for, with whatever points
+   * are already there, so the page leaves its loading state and the periodic
+   * refresh tries again.
+   */
+  let cityRequests = 0;
   async function loadCitySeries(days: number, force = false): Promise<void> {
     await start();
-    if (!service || citySeriesLoading.value || (!force && citySeries.value.days >= days)) return;
+    if (!service || (!force && citySeries.value.days >= days)) return;
+    cityRequests++;
     citySeriesLoading.value = true;
     try {
-      citySeries.value = { days, points: await service.getNetworkHourly(days) };
+      const points = await service.getNetworkHourly(days);
+      if (force || days >= citySeries.value.days) citySeries.value = { days, points };
     } catch {
-      // Charts show their empty state; live values are unaffected.
+      if (days > citySeries.value.days)
+        citySeries.value = { days, points: citySeries.value.points };
     } finally {
-      citySeriesLoading.value = false;
+      citySeriesLoading.value = --cityRequests > 0;
     }
   }
 
@@ -300,11 +351,17 @@ export const useAirStore = defineStore('air', () => {
     force = false,
   ): Promise<void> {
     await start();
-    if (!service || (!force && (placeSeries[place.id]?.days ?? 0) >= days)) return;
+    const loaded = placeSeries[place.id];
+    if (!service || (!force && (loaded?.days ?? 0) >= days)) return;
     try {
-      placeSeries[place.id] = { days, points: await service.getNetworkHourly(days, place.name) };
+      const points = await service.getNetworkHourly(days, place.name);
+      if (force || days >= (placeSeries[place.id]?.days ?? 0))
+        placeSeries[place.id] = { days, points };
     } catch {
-      // Left as it was; the next refresh tries again.
+      // Record the range so the periodic refresh tries again.
+      if (days > (placeSeries[place.id]?.days ?? 0)) {
+        placeSeries[place.id] = { days, points: placeSeries[place.id]?.points ?? [] };
+      }
     }
   }
 
@@ -327,7 +384,7 @@ export const useAirStore = defineStore('air', () => {
     now,
     lastLive,
     rawHistory,
-    hourlyHistory,
+    getHourly,
     citySeries,
     citySeriesLoading,
     placeSeries,

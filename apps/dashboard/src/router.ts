@@ -83,6 +83,11 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
+/** Sets the tab title for a route; also called when the language changes. */
+export function applyTitle(titleKey: string | undefined, t: (key: string) => string): void {
+  document.title = titleKey ? `${t(titleKey)} – ${t('app.name')}` : t('app.fullName');
+}
+
 export function createAppRouter(i18n: { global: { t: (key: string) => string } }): Router {
   const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -95,10 +100,7 @@ export function createAppRouter(i18n: { global: { t: (key: string) => string } }
   });
 
   const { t } = i18n.global;
-  router.afterEach((to) => {
-    const name = t('app.name');
-    document.title = to.meta.title ? `${t(to.meta.title)} – ${name}` : t('app.fullName');
-  });
+  router.afterEach((to) => applyTitle(to.meta.title, t));
 
   return router;
 }

@@ -5,7 +5,7 @@
  * they agree with each other and survive a reload.
  */
 
-import { pm25ToAqi } from '../lib/aqi';
+import { particlesToAqi } from '../lib/aqi';
 import type { HourlyPoint, Reading } from '../types';
 import { type MockSensor, seeded } from './sensors';
 
@@ -55,7 +55,7 @@ export function readingAt(sensor: MockSensor, time: number): Reading {
     temperature: round1(temperature),
     humidity: round1(Math.min(98, Math.max(20, humidity))),
     pressure: Math.round(1012 + noise(time, DAY, 5) * 8),
-    aqi: pm25ToAqi(pm25),
+    aqi: particlesToAqi(pm25, pm10),
     batteryMv: Math.round(3550 + sensor.seed * 450 + Math.max(0, dayCurve) * 180),
     signalStrength: Math.round(-62 - sensor.seed * 45 - noise(time, HOUR, salt + 11) * 8),
   };

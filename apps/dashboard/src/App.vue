@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppFooter from './components/AppFooter.vue';
 import AppHeader from './components/AppHeader.vue';
 import AppTabBar from './components/AppTabBar.vue';
 import StateBlock from './components/StateBlock.vue';
 import { useLocale } from './composables/useLocale';
+import { applyTitle } from './router';
 import { useAirStore } from './stores/air';
 
-const { t } = useLocale();
+const { t, locale } = useLocale();
 const route = useRoute();
 const store = useAirStore();
+
+// The tab title is text too: re-translate it when the language changes.
+watch(locale, () => applyTitle(route.meta.title, t));
 
 // One connection for the whole app: every page shows the same live picture.
 onMounted(() => void store.start());

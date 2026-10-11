@@ -145,6 +145,16 @@ describe('API integration', () => {
     for (const bucket of buckets) expect(bucket.sensorCount).toBeLessThanOrEqual(inPlace);
   });
 
+  it('GET /overview/history matches a neighbourhood whatever its case or spacing', async () => {
+    const sensors = (await (await get('/sensors')).json()) as Array<{ neighborhood?: string }>;
+    const neighborhood = sensors.find((s) => s.neighborhood)?.neighborhood as string;
+    const exact = await (await get(`/overview/history?neighborhood=${encodeURIComponent(neighborhood)}`)).json();
+    const loose = await (
+      await get(`/overview/history?neighborhood=${encodeURIComponent(`  ${neighborhood.toUpperCase()} `)}`)
+    ).json();
+    expect((loose as unknown[]).length).toBe((exact as unknown[]).length);
+  });
+
   it('GET /overview/history is empty for a neighbourhood with no sensors', async () => {
     const res = await get('/overview/history?neighborhood=No%20Such%20Place');
     expect(res.status).toBe(200);

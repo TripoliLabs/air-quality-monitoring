@@ -4,7 +4,7 @@
  */
 
 import type { NetworkHourlyPoint, Reading, Sensor, SensorStatus } from '../types';
-import { pm25ToAqi } from './aqi';
+import { particlesToAqi } from './aqi';
 
 /** A sensor counts as online if it reported within this window (matches the API). */
 export const ONLINE_WINDOW_MS = 15 * 60_000;
@@ -90,6 +90,7 @@ export function groupByNeighborhood(rows: SensorRow[]): NeighborhoodSummary[] {
 export interface SeriesPoint {
   time: number;
   pm25: number;
+  pm10: number;
   aqi: number;
   /** How many sensors contributed to the point. */
   sensors: number;
@@ -102,7 +103,8 @@ export function toSeries(points: NetworkHourlyPoint[], since = 0): SeriesPoint[]
     .map((point) => ({
       time: point.time,
       pm25: point.pm25,
-      aqi: pm25ToAqi(point.pm25),
+      pm10: point.pm10,
+      aqi: particlesToAqi(point.pm25, point.pm10),
       sensors: point.sensors,
     }));
 }
@@ -113,13 +115,18 @@ export interface HourOfDay {
   aqi: number | null;
 }
 
-/** The typical day: mean PM2.5 for each hour of the clock, in local time. */
+/** The typical day: mean particle levels for each hour of the clock, in local time. */
 export function hourOfDayProfile(series: SeriesPoint[]): HourOfDay[] {
-  const byHour: number[][] = Array.from({ length: 24 }, () => []);
-  for (const point of series) byHour[new Date(point.time).getHours()].push(point.pm25);
-  return byHour.map((values, hour) => {
-    const pm25 = mean(values);
-    return { hour, pm25, aqi: pm25 === null ? null : pm25ToAqi(pm25) };
+  const byHour: SeriesPoint[][] = Array.from({ length: 24 }, () => []);
+  for (const point of series) byHour[new Date(point.time).getHours()].push(point);
+  return byHour.map((points, hour) => {
+    const pm25 = mean(points.map((p) => p.pm25));
+    const pm10 = mean(points.map((p) => p.pm10));
+    return {
+      hour,
+      pm25,
+      aqi: pm25 === null || pm10 === null ? null : particlesToAqi(pm25, pm10),
+    };
   });
 }
 

@@ -8,7 +8,7 @@
  */
 
 import type { HourlyPoint, Reading } from '../types';
-import { aqiSolid, pm25ToAqi } from './aqi';
+import { aqiSolid, particlesToAqi, pm10ToAqi, pm25ToAqi } from './aqi';
 
 export type MetricId = 'aqi' | 'pm25' | 'pm10' | 'temperature' | 'humidity';
 
@@ -61,7 +61,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     unit: '',
     digits: 0,
     value: (r) => r.aqi,
-    hourly: (h) => pm25ToAqi(h.pm25),
+    hourly: (h) => particlesToAqi(h.pm25, h.pm10),
     color: (v) => aqiSolid(v),
     range: [0, 200],
   },
@@ -80,14 +80,7 @@ export const METRICS: Record<MetricId, MetricDef> = {
     digits: 1,
     value: (r) => r.pm10,
     hourly: (h) => h.pm10,
-    color: ramp([
-      [0, '#2FA35B'],
-      [54, '#F2C230'],
-      [154, '#F08A24'],
-      [254, '#CF2F28'],
-      [354, '#8B46B0'],
-      [424, '#7A1F3D'],
-    ]),
+    color: (v) => aqiSolid(pm10ToAqi(v)),
     range: [0, 150],
   },
   temperature: {
