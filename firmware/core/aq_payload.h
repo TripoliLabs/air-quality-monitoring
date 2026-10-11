@@ -22,6 +22,10 @@
  * so the decoder can branch on version (graceful mixed-firmware rollouts) and
  * heterogeneous fleets can advertise which sensors they carry. Legacy firmware
  * that sent 0 decodes as version 0 == the same layout with all sensors present.
+ *
+ * Both codecs are checked against the shared test vectors in
+ * packages/telemetry-codec/vectors (see test/test_vectors.c): change the layout
+ * there first, then here and in the TS codec.
  */
 #define AQ_PAYLOAD_LEN 13
 #define AQ_PAYLOAD_VERSION 1

@@ -3,7 +3,8 @@
  *
  * THE SINGLE SOURCE OF TRUTH for the byte layout shared between the ESP32
  * firmware (C struct) and the ingestion service (TS decoder). Any change here
- * must be mirrored in firmware/. Layout (little-endian, 13 bytes):
+ * must be mirrored in firmware/; the shared test vectors in ./vectors, which both
+ * test suites read, fail CI if the two disagree. Layout (little-endian, 13 bytes):
  *
  *   offset  size  field          encoding
  *   0       2     pm25 (x10)      uint16   µg/m³ × 10
@@ -39,7 +40,8 @@ export interface DecodedPayload {
   batteryMv: number;
   /** Payload version from byte 12 (present on decode). */
   version?: number;
-  /** Which sensor groups the node reported as populated (present on decode). */
+  /** Which sensor groups the node reported as populated (present on decode; on
+   * encode, defaults to every sensor). */
   sensorsPresent?: SensorsPresent;
 }
 
@@ -88,8 +90,9 @@ export function encodeUplink(p: DecodedPayload): Uint8Array {
   view.setUint16(6, u16(p.humidity * 100), true);
   view.setUint16(8, u16(p.pressure), true);
   view.setUint16(10, u16(p.batteryMv), true);
-  // Mirror the firmware: version + PM|ENV present.
-  bytes[12] = PAYLOAD_VERSION | PRESENT_PM | PRESENT_ENV;
+  // Mirror the firmware: version + presence bits (every sensor unless told otherwise).
+  const present = p.sensorsPresent ?? { pm: true, env: true };
+  bytes[12] = PAYLOAD_VERSION | (present.pm ? PRESENT_PM : 0) | (present.env ? PRESENT_ENV : 0);
   return bytes;
 }
 

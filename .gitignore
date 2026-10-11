@@ -460,6 +460,8 @@ sensor-data/
 *.dat
 # ...but the ESP32 partition table is real source, not sensor data.
 !firmware/partitions.csv
+# ...and so are the codec test vectors shared by the firmware and server suites.
+!packages/telemetry-codec/vectors/*.csv
 
 # Hardware test results
 hardware-test-results/
