@@ -14,16 +14,24 @@ $(BUILD)/aq-node-sim: $(CORE) sim/sensors_sim.c sim/main.c
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
-test: $(BUILD)/test_payload $(BUILD)/test_downlink $(BUILD)/test_sample ## build + run the host unit tests
+# Test vectors shared with the TypeScript codec; both suites must pass them.
+VECTORS := ../packages/telemetry-codec/vectors
+
+test: $(BUILD)/test_payload $(BUILD)/test_downlink $(BUILD)/test_sample $(BUILD)/test_vectors ## build + run the host unit tests
 	./$(BUILD)/test_payload
 	./$(BUILD)/test_downlink
 	./$(BUILD)/test_sample
+	./$(BUILD)/test_vectors $(VECTORS)
 
 $(BUILD)/test_payload: core/aq_payload.c test/test_payload.c
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
 $(BUILD)/test_downlink: core/aq_downlink.c test/test_downlink.c
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $^ -lm -o $@
+
+$(BUILD)/test_vectors: core/aq_payload.c core/aq_downlink.c test/test_vectors.c
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 

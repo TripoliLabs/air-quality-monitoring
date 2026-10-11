@@ -1,0 +1,41 @@
+# Shared uplink test vectors: the contract between the firmware encoder
+# (firmware/core/aq_payload.c) and the server codec (packages/telemetry-codec).
+# Both test suites read this file, so a layout change that is made on one side
+# only fails CI:
+#   firmware/test/test_vectors.c            encode(reading) must equal `hex`
+#   packages/telemetry-codec/test/vectors.test.ts
+#                                           encode(reading) must equal `hex`, and
+#                                           decode(`hex`) must equal the dec_* columns
+#
+# The expected bytes were worked out from the layout by hand, not copied from
+# either implementation. When the layout changes, edit this file first.
+#
+# Columns
+#   name                           unique label, shown on failure
+#   pm25 .. battery_mv, present    the reading given to the encoder (`present` is
+#                                  the AQ_PRESENT_* bitmask). `-` in all of them
+#                                  marks a decode-only row (bytes no current
+#                                  encoder emits, e.g. legacy firmware).
+#   hex                            the 13 payload bytes
+#   dec_*                          what the decoder must return for `hex`
+#
+# Inputs stay clear of half-way values (e.g. 0.05 µg/m³): the firmware computes
+# in float32 and the server in float64, so exact ties may round differently.
+name,pm25,pm10,temperature,humidity,pressure,battery_mv,present,hex,dec_pm25,dec_pm10,dec_temperature,dec_humidity,dec_pressure,dec_battery_mv,dec_version,dec_pm,dec_env
+typical,42.3,78.5,24.55,61.2,1013,3950,0x30,a70111039709e817f5036e0f31,42.3,78.5,24.55,61.2,1013,3950,1,1,1
+all_zero,0,0,0,0,0,0,0x30,00000000000000000000000031,0,0,0,0,0,0,1,1,1
+negative_temperature,5.0,9.0,-12.5,80,1021,3600,0x30,32005a001efb401ffd03100e31,5,9,-12.5,80,1021,3600,1,1,1
+
+# Sensor-presence bits (high nibble of byte 12).
+pm_absent,0,0,18.2,55.5,1009,4100,0x20,000000001c07ae15f103041021,0,0,18.2,55.5,1009,4100,1,0,1
+env_absent,12.4,20.1,0,0,0,3700,0x10,7c00c900000000000000740e11,12.4,20.1,0,0,0,3700,1,1,0
+no_sensors_battery_only,0,0,0,0,0,3300,0x00,00000000000000000000e40c01,0,0,0,0,0,3300,1,0,0
+low_nibble_of_present_ignored,1,2,3,4,5,6,0x3f,0a0014002c0190010500060031,1,2,3,4,5,6,1,1,1
+
+# Range limits: out-of-range values saturate, they never wrap.
+max_in_range,6553.5,6553.5,327.67,655.35,65535,65535,0x30,ffffffffff7fffffffffffff31,6553.5,6553.5,327.67,655.35,65535,65535,1,1,1
+clamp_high,100000,100000,400,700,70000,65535,0x30,ffffffffff7fffffffffffff31,6553.5,6553.5,327.67,655.35,65535,65535,1,1,1
+clamp_low,-5,-0.4,-400,-1,-10,0,0x30,00000000008000000000000031,0,0,-327.68,0,0,0,1,1,1
+
+# Decode-only: version 0 firmware sent byte 12 = 0 and carried every sensor.
+legacy_v0,-,-,-,-,-,-,-,a70111039709e817f5036e0f00,42.3,78.5,24.55,61.2,1013,3950,0,1,1
