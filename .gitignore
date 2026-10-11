@@ -583,3 +583,11 @@ firmware/managed_components/
 
 # pnpm store when installing inside a container
 .pnpm-store/
+
+# ============================================================================
+# Dashboard source that broader rules above would otherwise swallow
+# ============================================================================
+# `lib/` (Python packaging) and `public/` are ignored repo-wide; in the
+# dashboard they are source: shared logic and static files served as-is.
+!apps/dashboard/src/lib/
+!apps/dashboard/public/
