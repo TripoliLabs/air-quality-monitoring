@@ -152,8 +152,9 @@ function addSensorLayers(m: MapLibreMap): void {
     layout: { 'circle-sort-key': ['get', 'rank'] },
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 12.5, 9, 15, 16],
-      // Sensors that are not reporting are hollow, not just grey.
-      'circle-color': ['case', ['get', 'live'], ['get', 'color'], halo],
+      // Sensors that are not reporting are a faint grey ring, not a coloured dot.
+      'circle-color': ['case', ['get', 'live'], ['get', 'color'], AQI_UNKNOWN.solid],
+      'circle-opacity': ['case', ['get', 'live'], 1, 0.3],
       'circle-stroke-width': ['case', ['get', 'live'], 2, 2.5],
       'circle-stroke-color': ['case', ['get', 'live'], halo, AQI_UNKNOWN.solid],
     },
@@ -193,7 +194,12 @@ function fitToSensors(m: MapLibreMap): void {
   fitted = true;
   const bounds = new LngLatBounds();
   for (const row of props.rows) bounds.extend([row.sensor.longitude, row.sensor.latitude]);
-  m.fitBounds(bounds, { padding: 56, maxZoom: 14.5, duration: 0 });
+  // Extra room at the top and bottom for the layer switcher and the legend.
+  m.fitBounds(bounds, {
+    padding: props.compact ? 48 : { top: 84, bottom: 84, left: 48, right: 56 },
+    maxZoom: 14.5,
+    duration: 0,
+  });
 }
 
 function ripple(reading: Reading): void {
@@ -241,6 +247,13 @@ onMounted(() => {
     m.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
   }
   m.on('style.load', () => onStyleReady(m));
+  // The attribution opens expanded; fold it to its "i" button so it does not
+  // sit on top of the legend on a narrow screen. One tap opens it again.
+  m.once('load', () => {
+    container.value
+      ?.querySelector('.maplibregl-ctrl-attrib')
+      ?.classList.remove('maplibregl-compact-show');
+  });
   m.on('error', (event) => {
     // A failed basemap leaves an empty canvas; say so instead.
     if (!styleReady && /style|fetch|network/i.test(String(event.error?.message)))
@@ -323,9 +336,10 @@ const legend = computed(() => {
         />
       </div>
 
-      <!-- Legend -->
+      <!-- Legend. Pinned to the physical left in both directions: the map's own
+           zoom buttons are always bottom right. -->
       <div
-        class="absolute start-3 bottom-3 z-10 max-w-[calc(100%-5rem)] rounded-control border bg-surface/92 px-3 py-2 text-xs backdrop-blur-sm"
+        class="absolute bottom-3 left-3 z-10 max-w-[calc(100%-5rem)] rounded-control border bg-surface/92 px-3 py-2 text-xs backdrop-blur-sm"
         :class="{ 'max-sm:hidden': selected }"
       >
         <div v-if="!legend" class="flex items-center gap-2" dir="ltr">
@@ -359,7 +373,7 @@ const legend = computed(() => {
       >
         <div
           v-if="selected"
-          class="absolute inset-x-3 bottom-3 z-20 rounded-panel border bg-raised p-4 shadow-[0_16px_40px_-16px_rgb(7_22_31/0.5)] sm:inset-x-auto sm:end-14 sm:w-80"
+          class="absolute inset-x-3 bottom-3 z-20 rounded-panel border bg-raised p-4 shadow-[0_16px_40px_-16px_rgb(7_22_31/0.5)] sm:right-14 sm:left-auto sm:w-80"
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">

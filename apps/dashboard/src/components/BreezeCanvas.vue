@@ -114,10 +114,10 @@ function draw(dt: number): void {
 
     const y = s.y + drift;
     const len = Math.max(1.5, length * near);
-    const alpha = (0.07 + s.depth * 0.16) * (0.75 + haze * 0.9);
+    const alpha = (0.05 + s.depth * 0.13) * (0.75 + haze * 0.9);
     ctx.lineWidth = 0.8 + s.depth * (0.9 + haze * 1.6);
     if (s.tinted && tint && haze > 0.12) {
-      ctx.globalAlpha = Math.min(0.7, alpha * 2.2);
+      ctx.globalAlpha = Math.min(0.6, alpha * 2);
       ctx.strokeStyle = tint;
     } else {
       ctx.globalAlpha = 1;

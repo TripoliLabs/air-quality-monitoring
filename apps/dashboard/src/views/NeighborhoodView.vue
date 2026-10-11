@@ -63,7 +63,9 @@ const trend = computed(() => {
             {{ t('neighborhood.back') }}
           </RouterLink>
 
-          <div class="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-12">
+          <div
+            class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-12"
+          >
             <div>
               <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <h1 v-if="place" class="text-xl font-medium sm:text-2xl">{{ placeName(place) }}</h1>
@@ -90,9 +92,7 @@ const trend = computed(() => {
                   <span>{{ formatClock(trend[trend.length - 1].time, locale) }}</span>
                 </div>
               </div>
-              <dl
-                class="grid grid-cols-2 divide-line border-t sm:grid-cols-4 sm:divide-x rtl:sm:divide-x-reverse"
-              >
+              <dl class="grid grid-cols-2 gap-x-6 border-t sm:grid-cols-4">
                 <MetricTile
                   v-for="id in ['pm25', 'pm10', 'temperature', 'humidity'] as const"
                   :key="id"

@@ -20,8 +20,7 @@ export function useLocale() {
     applyLocale(next);
   }
 
-  const n = (value: number | null | undefined, digits = 0): string =>
-    formatNumber(value, current.value, digits);
+  const n = formatNumber;
 
   /** A metric value with the right number of decimals. */
   const metricValue = (id: MetricId, value: number | null | undefined): string =>

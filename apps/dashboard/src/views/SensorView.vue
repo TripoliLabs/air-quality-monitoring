@@ -102,7 +102,9 @@ const battery = computed(() => {
             {{ t('sensor.back') }}
           </RouterLink>
 
-          <div class="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-12">
+          <div
+            class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-12"
+          >
             <div>
               <div class="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                 <div class="min-w-0">
@@ -135,13 +137,10 @@ const battery = computed(() => {
               />
             </div>
 
-            <dl
-              class="grid grid-cols-2 content-end divide-line border-t sm:divide-x lg:border-t-0 rtl:sm:divide-x-reverse"
-            >
+            <dl class="grid grid-cols-2 content-end gap-x-6 border-t lg:border-t-0">
               <MetricTile
                 v-for="id in ['pm25', 'pm10', 'temperature', 'humidity'] as const"
                 :key="id"
-                class="odd:ps-0"
                 :label="t(`metrics.${id}.name`)"
                 :hint="id.startsWith('pm') ? t(`metrics.${id}.short`) : undefined"
                 :value="metricValue(id, reading ? METRICS[id].value(reading) : null)"
@@ -184,7 +183,7 @@ const battery = computed(() => {
         />
       </section>
 
-      <div v-if="row" class="grid gap-5 lg:grid-cols-2 lg:gap-7">
+      <div v-if="row" class="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-7">
         <section aria-labelledby="location-title">
           <h2 id="location-title" class="mb-3 text-xl">{{ t('sensor.location') }}</h2>
           <SensorMap class="h-72 lg:h-80" :rows="[row]" :focus-id="row.sensor.id" compact />
@@ -205,9 +204,9 @@ const battery = computed(() => {
               <dt class="inline-flex items-center gap-2 text-ink-2">
                 <AppIcon name="battery" />{{ t('sensor.battery') }}
               </dt>
-              <dd v-if="battery">
+              <dd v-if="battery" class="flex items-baseline gap-2">
                 <span class="num font-medium">{{ n(battery.percent) }}%</span>
-                <span class="num ms-2 text-ink-3">{{ n(battery.volts, 2) }} V</span>
+                <span class="num text-ink-3">{{ n(battery.volts, 2) }} V</span>
               </dd>
               <dd v-else>–</dd>
             </div>

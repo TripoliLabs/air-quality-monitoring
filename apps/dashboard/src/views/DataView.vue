@@ -78,7 +78,9 @@ const endpoints = [
   <div class="shell space-y-5 py-4 sm:space-y-7 sm:py-6">
     <PageHeader :title="t('data.title')" :intro="t('data.intro')" />
 
-    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-start lg:gap-7">
+    <div
+      class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-start lg:gap-7"
+    >
       <section aria-labelledby="download-title" class="panel p-5 sm:p-6">
         <h2 id="download-title" class="mb-4 text-xl">{{ t('data.downloadTitle') }}</h2>
         <form class="space-y-4" @submit.prevent="download">

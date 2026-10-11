@@ -309,4 +309,16 @@
   @variant lg {
     padding-inline: 2.5rem;
   }
+  /* Large desktop monitors and wall displays: use the room. */
+  @media (min-width: 112rem) {
+    max-width: 108rem;
+  }
+}
+
+/* On very wide screens everything scales up together (all sizes are in rem),
+   so a dashboard on a wall display is readable from across the room. */
+@media (min-width: 140rem) {
+  html {
+    font-size: 112.5%;
+  }
 }

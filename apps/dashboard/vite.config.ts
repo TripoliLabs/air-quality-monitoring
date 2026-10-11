@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -30,6 +30,10 @@ export default defineConfig({
   build: {
     target: 'esnext',
     sourcemap: true,
+  },
+  test: {
+    include: ['test/**/*.test.ts'],
+    environment: 'node',
   },
   optimizeDeps: {
     include: ['echarts', 'vue-echarts'],

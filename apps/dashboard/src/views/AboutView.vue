@@ -19,7 +19,9 @@ const hardware = ['board', 'particles', 'climate', 'power'] as const;
   <div class="shell space-y-5 py-4 sm:space-y-7 sm:py-6">
     <PageHeader :title="t('about.title')" :intro="t('about.lede')" />
 
-    <div class="grid gap-x-12 gap-y-10 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+    <div
+      class="grid grid-cols-1 gap-x-12 gap-y-10 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
+    >
       <section aria-labelledby="why-title" class="max-w-prose">
         <h2 id="why-title" class="text-2xl">{{ t('about.whyTitle') }}</h2>
         <p class="mt-4">{{ t('about.why1') }}</p>
@@ -95,7 +97,7 @@ const hardware = ['board', 'particles', 'climate', 'power'] as const;
       </div>
     </section>
 
-    <div class="grid gap-x-12 gap-y-10 border-t pt-10 lg:grid-cols-2">
+    <div class="grid grid-cols-1 gap-x-12 gap-y-10 border-t pt-10 lg:grid-cols-2">
       <section aria-labelledby="hardware-title">
         <h2 id="hardware-title" class="text-2xl">{{ t('about.hardwareTitle') }}</h2>
         <ul class="mt-3 divide-y divide-line">

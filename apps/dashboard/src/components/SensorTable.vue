@@ -127,7 +127,7 @@ function open(row: SensorRow): void {
 <template>
   <div>
     <div v-if="searchable" class="mb-4 flex flex-wrap items-center gap-3">
-      <label class="relative block min-w-0 flex-1 sm:max-w-xs">
+      <label class="relative block min-w-0 basis-full sm:max-w-xs sm:flex-1 sm:basis-auto">
         <span class="sr-only">{{ t('sensors.search') }}</span>
         <AppIcon
           name="search"
@@ -142,11 +142,11 @@ function open(row: SensorRow): void {
       </label>
 
       <!-- Sorting on a phone, where there are no column headers to press. -->
-      <label class="md:hidden">
+      <label class="max-sm:basis-full md:hidden">
         <span class="sr-only">{{ t('sensors.sortBy', { column: '' }) }}</span>
         <select
           :value="key"
-          class="h-11 rounded-control border bg-surface px-3 text-sm"
+          class="h-11 w-full rounded-control border bg-surface px-3 text-sm"
           @change="toggle(($event.target as HTMLSelectElement).value as SortKey)"
         >
           <option v-for="column in columns" :key="column.key" :value="column.key">
@@ -262,13 +262,17 @@ function open(row: SensorRow): void {
                 <span class="num">{{
                   live(row) ? metricValue('temperature', row.reading?.temperature) : '–'
                 }}</span>
-                <span v-if="live(row)" class="text-ink-3"> {{ metricUnit('temperature') }}</span>
+                <span v-if="live(row)" class="inline-block text-ink-3">
+                  {{ metricUnit('temperature') }}</span
+                >
               </td>
               <td class="py-3 pe-4 text-end whitespace-nowrap">
                 <span class="num">{{
                   live(row) ? metricValue('humidity', row.reading?.humidity) : '–'
                 }}</span>
-                <span v-if="live(row)" class="text-ink-3">{{ metricUnit('humidity') }}</span>
+                <span v-if="live(row)" class="inline-block text-ink-3">{{
+                  metricUnit('humidity')
+                }}</span>
               </td>
               <td class="py-3 whitespace-nowrap" :class="live(row) ? 'text-ink-2' : 'text-danger'">
                 {{ seen(row) }}

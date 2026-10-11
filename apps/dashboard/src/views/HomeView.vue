@@ -31,7 +31,7 @@ const stats = computed(() => [
   <div>
     <SkyPanel :aqi="city.aqi" :density="1.25" flush class="border-b">
       <div
-        class="shell grid gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end lg:gap-16 lg:py-24"
+        class="shell grid grid-cols-1 gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end lg:gap-16 lg:py-24"
       >
         <div>
           <h1
@@ -131,7 +131,7 @@ const stats = computed(() => [
       </section>
 
       <section aria-labelledby="built-title" class="border-t py-12 sm:py-16">
-        <div class="grid gap-x-16 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        <div class="grid grid-cols-1 gap-x-16 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
           <div>
             <h2 id="built-title" class="text-title">{{ t('about.builtTitle') }}</h2>
             <p class="mt-4 max-w-md text-ink-2">{{ t('about.why1') }}</p>

@@ -2,6 +2,12 @@
 
 Tracking doc for what the Vue 3 dashboard (`apps/dashboard/`) needs before it's production-grade.
 
+> **Update (2026-10-11):** the dashboard was rebuilt (issue #54). The service
+> layer, the mock/production split, realtime resilience, unit tests, theming,
+> RTL and the PrimeVue removal described there supersede several items below;
+> see [`apps/dashboard/README.md`](../apps/dashboard/README.md) for the current
+> architecture. This checklist is kept for the items that remain open.
+
 **Current state (2026-06-27):** Architecturally solid prototype (~8/10 bones), but prototype-grade in the ways that separate "nice demo" from "production." Runs entirely on mock data (`src/mock/simulator.ts`); the backend it should talk to is still scaffolding. `axios` and `socket.io-client` are already dependencies but unused.
 
 Legend: 🔴 blocker · 🟡 important · 🟢 nice-to-have

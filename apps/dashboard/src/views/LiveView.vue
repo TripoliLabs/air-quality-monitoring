@@ -56,7 +56,7 @@ const trendRange = computed(() => {
 
     <SkyPanel :aqi="city.aqi">
       <div
-        class="grid gap-8 p-5 sm:p-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-12 lg:p-10"
+        class="grid grid-cols-1 gap-8 p-5 sm:p-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-12 lg:p-10"
       >
         <div>
           <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -93,9 +93,7 @@ const trendRange = computed(() => {
             <p v-else class="text-sm text-ink-3">{{ t('live.trendEmpty') }}</p>
           </div>
 
-          <dl
-            class="grid grid-cols-2 divide-line border-t sm:grid-cols-4 sm:divide-x rtl:sm:divide-x-reverse"
-          >
+          <dl class="grid grid-cols-2 gap-x-6 border-t sm:grid-cols-4">
             <MetricTile
               :label="t('metrics.pm25.short')"
               :value="metricValue('pm25', city.pm25)"
@@ -129,7 +127,7 @@ const trendRange = computed(() => {
     />
 
     <template v-else>
-      <div class="grid gap-5 lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)] lg:gap-7">
+      <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)] lg:gap-7">
         <section aria-labelledby="map-title" class="flex flex-col">
           <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4">
             <h2 id="map-title" class="text-xl">{{ t('live.mapTitle') }}</h2>

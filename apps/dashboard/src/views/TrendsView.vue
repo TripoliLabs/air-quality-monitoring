@@ -104,7 +104,7 @@ const compared = computed((): RankItem[] =>
       />
     </section>
 
-    <div class="grid gap-5 lg:grid-cols-2 lg:gap-7">
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-7">
       <section aria-labelledby="day-title" class="panel p-5 sm:p-6">
         <h2 id="day-title" class="text-xl">{{ t('trends.dayTitle') }}</h2>
         <p class="mt-1 mb-5 text-sm text-ink-2">{{ t('trends.dayHint') }}</p>
