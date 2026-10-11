@@ -1,201 +1,119 @@
 <script setup lang="ts">
-import AqiBadge from '@components/AqiBadge.vue';
-import ReadingCard from '@components/ReadingCard.vue';
-import SensorMap from '@components/SensorMap.vue';
-import { useSensorsStore, type SensorTimeSeries } from '@stores/sensors';
-import Column from 'primevue/column';
-import DataTable from 'primevue/datatable';
-import { computed, onMounted } from 'vue';
-import { useI18n } from 'vue-i18n';
-import { useRoute, useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
+import { computed, defineAsyncComponent, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import AirSparkline from '../components/AirSparkline.vue';
+import AirVerdict from '../components/AirVerdict.vue';
+import AppIcon from '../components/AppIcon.vue';
+import LiveIndicator from '../components/LiveIndicator.vue';
+import MetricTile from '../components/MetricTile.vue';
+import SensorTable from '../components/SensorTable.vue';
+import SkyPanel from '../components/SkyPanel.vue';
+import StateBlock from '../components/StateBlock.vue';
+import { useLocale } from '../composables/useLocale';
+import { formatClock } from '../lib/format';
+import { networkSeries } from '../lib/stats';
+import { useAirStore } from '../stores/air';
+
+const SensorMap = defineAsyncComponent(() => import('../components/SensorMap.vue'));
+const HOUR = 3_600_000;
 
 const route = useRoute();
-const router = useRouter();
-const { t, locale } = useI18n();
-const store = useSensorsStore();
+const { t, n, locale, metricValue, metricUnit, placeName } = useLocale();
+const store = useAirStore();
+const { ready, now, lastLive, networkHourly } = storeToRefs(store);
 
-// Computed so same-route navigation (component reused, no remount) updates the view.
-const neighborhoodId = computed(() => route.params.id as string);
+const place = computed(() => store.getNeighborhood(String(route.params.id)));
 
-onMounted(() => {
-  if (!store.isSimulating) {
-    store.startSimulation();
+onMounted(() => void store.ensureNetworkHourly(1));
+
+const trend = computed(() => {
+  if (!place.value) return [];
+  const ids = new Set(place.value.rows.map((row) => row.sensor.id));
+  const series = networkSeries(networkHourly.value.bySensor, now.value - 24 * HOUR, ids);
+  const { aqi, pm25, online } = place.value;
+  if (series.length && aqi !== null && pm25 !== null) {
+    series.push({ time: now.value, pm25, aqi, sensors: online });
   }
+  return series;
 });
-
-const neighborhood = computed(() => {
-  return store.getNeighborhood(neighborhoodId.value);
-});
-
-const sensors = computed(() => {
-  return store.getSensorsByNeighborhood(neighborhoodId.value);
-});
-
-/** Map centre = mean position of the neighbourhood's sensors. */
-const center = computed(() => {
-  const list = sensors.value;
-  if (list.length === 0) return undefined;
-  const lat = list.reduce((s, x) => s + x.definition.location.latitude, 0) / list.length;
-  const lon = list.reduce((s, x) => s + x.definition.location.longitude, 0) / list.length;
-  return { latitude: lat, longitude: lon };
-});
-
-const neighborhoodName = computed(() => {
-  if (!neighborhood.value) return neighborhoodId.value;
-  return locale.value === 'ar' ? neighborhood.value.nameAr : neighborhood.value.name;
-});
-
-const averages = computed(() => {
-  const withReadings = sensors.value.filter((s) => s.latest !== null);
-  const count = withReadings.length;
-  if (count === 0) {
-    return { aqi: 0, pm25: 0, pm10: 0, temp: 0, humidity: 0 };
-  }
-  const pm25 = withReadings.reduce((sum, s) => sum + (s.latest?.pm2_5 ?? 0), 0) / count;
-  const pm10 = withReadings.reduce((sum, s) => sum + (s.latest?.pm10 ?? 0), 0) / count;
-  const temp = withReadings.reduce((sum, s) => sum + (s.latest?.temperature ?? 0), 0) / count;
-  const humidity = withReadings.reduce((sum, s) => sum + (s.latest?.humidity ?? 0), 0) / count;
-  const aqi = Math.round(withReadings.reduce((sum, s) => sum + (s.latest?.aqi ?? 0), 0) / count);
-  return {
-    aqi,
-    pm25: Math.round(pm25 * 10) / 10,
-    pm10: Math.round(pm10 * 10) / 10,
-    temp: Math.round(temp * 10) / 10,
-    humidity: Math.round(humidity * 10) / 10,
-  };
-});
-
-function getSensorName(sensor: SensorTimeSeries): string {
-  return locale.value === 'ar' ? sensor.definition.nameAr : sensor.definition.name;
-}
-
-function onRowClick(event: { data: SensorTimeSeries }): void {
-  router.push({ name: 'sensor-detail', params: { id: event.data.definition.id } });
-}
-
-function goBack(): void {
-  router.push({ name: 'dashboard' });
-}
 </script>
 
 <template>
-  <div class="space-y-4">
-    <!-- Header -->
-    <div class="flex items-center gap-4">
-      <button
-        class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 transition hover:bg-gray-700"
-        @click="goBack"
-      >
-        <i class="pi pi-arrow-left mr-1"></i>
-        {{ t('neighborhood.backToDashboard') }}
-      </button>
-      <div class="flex-1">
-        <h2 class="text-2xl font-bold text-gray-100">{{ neighborhoodName }}</h2>
-        <p class="text-sm text-gray-400">{{ sensors.length }} {{ t('neighborhood.sensors') }}</p>
-      </div>
-      <AqiBadge v-if="averages.aqi > 0" :aqi="averages.aqi" size="lg" />
-    </div>
+  <div class="shell space-y-5 py-4 sm:space-y-7 sm:py-6">
+    <StateBlock
+      v-if="ready && !place"
+      icon="pin"
+      :title="t('neighborhood.notFoundTitle')"
+      :body="t('neighborhood.notFoundBody')"
+    >
+      <RouterLink :to="{ name: 'live' }" class="btn btn-primary">{{
+        t('states.goLive')
+      }}</RouterLink>
+    </StateBlock>
 
-    <!-- Map (zoomed to neighborhood) -->
-    <SensorMap
-      :sensors="sensors"
-      :center="center"
-      :zoom="15.5"
-      height="400px"
-      @sensor-click="(id: string) => router.push({ name: 'sensor-detail', params: { id } })"
-    />
+    <template v-else>
+      <SkyPanel :aqi="place?.aqi ?? null">
+        <div class="p-5 sm:p-8 lg:p-10">
+          <RouterLink
+            :to="{ name: 'live' }"
+            class="-ms-1 mb-5 inline-flex items-center gap-1.5 text-sm text-ink-2 hover:text-ink"
+          >
+            <AppIcon name="back" directional />
+            {{ t('neighborhood.back') }}
+          </RouterLink>
 
-    <!-- Average Reading Cards -->
-    <div>
-      <h3 class="mb-2 text-lg font-semibold text-gray-100">
-        {{ t('neighborhood.averages') }}
-      </h3>
-      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <ReadingCard label="PM2.5" :value="averages.pm25 || '--'" unit="ug/m3" icon="pi pi-cloud" />
-        <ReadingCard label="PM10" :value="averages.pm10 || '--'" unit="ug/m3" icon="pi pi-cloud" />
-        <ReadingCard
-          :label="t('readings.temperature')"
-          :value="averages.temp || '--'"
-          unit="°C"
-          icon="pi pi-sun"
-        />
-        <ReadingCard
-          :label="t('readings.humidity')"
-          :value="averages.humidity || '--'"
-          unit="%"
-          icon="pi pi-wave-pulse"
-        />
-      </div>
-    </div>
+          <div class="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-12">
+            <div>
+              <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <h1 v-if="place" class="text-xl font-medium sm:text-2xl">{{ placeName(place) }}</h1>
+                <div v-else class="skeleton h-7 w-48" />
+                <LiveIndicator />
+              </div>
+              <AirVerdict
+                :aqi="place?.aqi ?? null"
+                :loading="!ready"
+                :waiting-title="t('live.waitingTitle')"
+                :waiting-body="t('live.waitingBody')"
+              />
+              <p v-if="place" class="mt-4 text-sm text-ink-2">
+                {{ t('sensors.reporting', { online: n(place.online), total: n(place.total) }) }}
+              </p>
+            </div>
 
-    <!-- Sensor Table -->
-    <div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
-      <h3 class="mb-3 text-lg font-semibold text-gray-100">
-        {{ t('neighborhood.sensors') }}
-      </h3>
-      <DataTable
-        :value="sensors"
-        striped-rows
-        row-hover
-        sort-field="definition.name"
-        :sort-order="1"
-        class="cursor-pointer"
-        @row-click="onRowClick"
-      >
-        <Column :header="t('sensors.name')" sortable sort-field="definition.name">
-          <template #body="{ data }: { data: SensorTimeSeries }">
-            <span class="font-medium text-gray-100">{{ getSensorName(data) }}</span>
-          </template>
-        </Column>
-        <Column header="AQI" sortable sort-field="latest.aqi">
-          <template #body="{ data }: { data: SensorTimeSeries }">
-            <AqiBadge v-if="data.latest" :aqi="data.latest.aqi" size="sm" />
-            <span v-else class="text-gray-500">--</span>
-          </template>
-        </Column>
-        <Column header="PM2.5" sortable sort-field="latest.pm2_5">
-          <template #body="{ data }: { data: SensorTimeSeries }">
-            <span class="text-gray-300">
-              {{ data.latest?.pm2_5?.toFixed(1) ?? '--' }}
-            </span>
-          </template>
-        </Column>
-        <Column header="PM10" sortable sort-field="latest.pm10">
-          <template #body="{ data }: { data: SensorTimeSeries }">
-            <span class="text-gray-300">
-              {{ data.latest?.pm10?.toFixed(1) ?? '--' }}
-            </span>
-          </template>
-        </Column>
-        <Column :header="t('readings.temperature')" sortable sort-field="latest.temperature">
-          <template #body="{ data }: { data: SensorTimeSeries }">
-            <span class="text-gray-300">
-              {{ data.latest ? `${data.latest.temperature.toFixed(1)}°C` : '--' }}
-            </span>
-          </template>
-        </Column>
-        <Column :header="t('readings.humidity')" sortable sort-field="latest.humidity">
-          <template #body="{ data }: { data: SensorTimeSeries }">
-            <span class="text-gray-300">
-              {{ data.latest ? `${data.latest.humidity.toFixed(1)}%` : '--' }}
-            </span>
-          </template>
-        </Column>
-        <Column :header="t('sensors.status')">
-          <template #body="{ data }: { data: SensorTimeSeries }">
-            <span
-              class="inline-flex items-center rounded-full px-2 py-0.5 text-xs"
-              :class="{
-                'bg-green-900/40 text-green-400': data.definition.status === 'online',
-                'bg-red-900/40 text-red-400': data.definition.status === 'offline',
-                'bg-yellow-900/40 text-yellow-400': data.definition.status === 'maintenance',
-              }"
-            >
-              {{ data.definition.status }}
-            </span>
-          </template>
-        </Column>
-      </DataTable>
-    </div>
+            <div class="flex flex-col justify-end gap-5">
+              <div v-if="trend.length > 1">
+                <h2 class="mb-2 text-sm font-normal text-ink-2">{{ t('neighborhood.trend') }}</h2>
+                <AirSparkline :points="trend" :height="84" />
+                <div class="num mt-1 flex justify-between text-xs text-ink-3" dir="ltr">
+                  <span>{{ formatClock(trend[0].time, locale) }}</span>
+                  <span>{{ formatClock(trend[trend.length - 1].time, locale) }}</span>
+                </div>
+              </div>
+              <dl
+                class="grid grid-cols-2 divide-line border-t sm:grid-cols-4 sm:divide-x rtl:sm:divide-x-reverse"
+              >
+                <MetricTile
+                  v-for="id in ['pm25', 'pm10', 'temperature', 'humidity'] as const"
+                  :key="id"
+                  :label="id.startsWith('pm') ? t(`metrics.${id}.short`) : t(`metrics.${id}.name`)"
+                  :value="metricValue(id, place?.[id] ?? null)"
+                  :unit="metricUnit(id)"
+                />
+              </dl>
+            </div>
+          </div>
+        </div>
+      </SkyPanel>
+
+      <template v-if="place">
+        <SensorMap class="h-[min(60vh,30rem)] min-h-80" :rows="place.rows" :pulse="lastLive" />
+
+        <section aria-labelledby="sensors-title" class="panel p-5 sm:p-6">
+          <h2 id="sensors-title" class="mb-4 text-xl">{{ t('neighborhood.sensors') }}</h2>
+          <SensorTable :rows="place.rows" hide-place :searchable="false" />
+        </section>
+      </template>
+    </template>
   </div>
 </template>
