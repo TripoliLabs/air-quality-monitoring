@@ -24,7 +24,7 @@ jobs:
             A maintainer will review this soon. In the meantime:
             - Check our [Contributing Guide](../../CONTRIBUTING.md) for guidelines
             - Join the discussion in our [Discussions tab](../../discussions)
-            - Read [CLAUDE.md](../../CLAUDE.md) for technical context
+            - Read [AGENTS.md](../../AGENTS.md) for technical context
 
             **New to open source?** Look for issues labeled `good first issue` to get started!
           pr_message: |
