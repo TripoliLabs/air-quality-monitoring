@@ -48,6 +48,19 @@ export interface HourlyPoint {
   samples: number;
 }
 
+/** One hour of the whole network, or of one neighbourhood. */
+export interface NetworkHourlyPoint {
+  /** Epoch milliseconds of the start of the hour. */
+  time: number;
+  pm25: number;
+  pm10: number;
+  temperature: number;
+  humidity: number;
+  maxAqi: number;
+  /** Sensors that reported in the hour. */
+  sensors: number;
+}
+
 /** Derived from `isActive` and how recently the sensor reported. */
 export type SensorStatus = 'online' | 'offline' | 'inactive';
 

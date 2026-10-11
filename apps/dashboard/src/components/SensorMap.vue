@@ -16,9 +16,10 @@ import {
   NavigationControl,
   setWorkerUrl,
 } from 'maplibre-gl';
-// MapLibre 6 ships its worker as a separate module. Handing it the bundled URL
-// keeps the worker same-origin and working under Vite in dev and in the build.
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+// MapLibre 6 ships its worker as a separate module that imports a shared
+// chunk. `?worker&url` has Vite bundle the worker together with what it imports
+// and hand back the URL, so the map works in dev, in the build and on any host.
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useAqi } from '../composables/useAqi';

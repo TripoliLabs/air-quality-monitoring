@@ -11,34 +11,45 @@
  *   2. if the socket drops, the store polls the bulk "latest" endpoint until it
  *      is back, then resyncs;
  *   3. the sensor list is refreshed periodically and whenever an unknown
- *      sensor reports, so newly registered sensors appear on their own.
+ *      sensor reports, so newly registered sensors appear on their own;
+ *   4. hourly history that is on screen is re-read on the same schedule.
  */
 
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, shallowRef } from 'vue';
 import {
   groupByNeighborhood,
-  mapLimit,
   type NeighborhoodSummary,
-  networkSeries,
   type SensorRow,
   type SeriesPoint,
   sensorStatus,
   summarise,
+  toSeries,
 } from '../lib/stats';
 import { createSensorService, type SensorService } from '../services';
-import type { ConnectionState, DataSourceKind, HourlyPoint, Reading, Sensor } from '../types';
+import type {
+  ConnectionState,
+  DataSourceKind,
+  HourlyPoint,
+  NetworkHourlyPoint,
+  Reading,
+  Sensor,
+} from '../types';
 
 const CLOCK_MS = 10_000;
 const POLL_AFTER_MS = 8_000;
 const POLL_EVERY_MS = 30_000;
 const SENSOR_REFRESH_MS = 5 * 60_000;
-const HISTORY_CONCURRENCY = 6;
 const HOUR = 3_600_000;
 
 interface RawHistory {
   hours: number;
   readings: Reading[];
+}
+
+interface NetworkSeries {
+  days: number;
+  points: NetworkHourlyPoint[];
 }
 
 interface HourlyHistory {
@@ -60,12 +71,11 @@ export const useAirStore = defineStore('air', () => {
 
   const rawHistory = reactive<Record<string, RawHistory>>({});
   const hourlyHistory = reactive<Record<string, HourlyHistory>>({});
-  /** Hourly history for every sensor, loaded on demand for network-wide charts. */
-  const networkHourly = shallowRef<{ days: number; bySensor: Record<string, HourlyPoint[]> }>({
-    days: 0,
-    bySensor: {},
-  });
-  const networkHourlyLoading = ref(false);
+  /** Hourly history of the whole network, loaded on demand. */
+  const citySeries = shallowRef<NetworkSeries>({ days: 0, points: [] });
+  const citySeriesLoading = ref(false);
+  /** Hourly history of single neighbourhoods, keyed by neighbourhood id. */
+  const placeSeries = reactive<Record<string, NetworkSeries>>({});
 
   let service: SensorService | null = null;
   let starting: Promise<void> | null = null;
@@ -89,7 +99,7 @@ export const useAirStore = defineStore('air', () => {
 
   /** Network-wide hourly AQI for the last 24 hours, ending with the live value. */
   const cityTrend = computed((): SeriesPoint[] => {
-    const series = networkSeries(networkHourly.value.bySensor, now.value - 24 * HOUR);
+    const series = toSeries(citySeries.value.points, now.value - 24 * HOUR);
     const live = city.value;
     if (live.aqi !== null && live.pm25 !== null && series.length) {
       series.push({ time: now.value, pm25: live.pm25, aqi: live.aqi, sensors: live.online });
@@ -208,7 +218,12 @@ export const useAirStore = defineStore('air', () => {
       });
       if (timers.length === 0) {
         timers.push(setInterval(() => (now.value = Date.now()), CLOCK_MS));
-        timers.push(setInterval(() => void refreshSensors(), SENSOR_REFRESH_MS));
+        timers.push(
+          setInterval(() => {
+            void refreshSensors();
+            refreshSeries();
+          }, SENSOR_REFRESH_MS),
+        );
         document.addEventListener('visibilitychange', onVisible);
       }
     } catch (err) {
@@ -264,24 +279,41 @@ export const useAirStore = defineStore('air', () => {
     return service ? service.getHourly(sensorId, days) : [];
   }
 
-  /** Makes sure hourly history for every sensor covers at least `days`. */
-  async function ensureNetworkHourly(days: number): Promise<void> {
+  /** Makes sure the network-wide hourly history covers at least `days`. */
+  async function loadCitySeries(days: number, force = false): Promise<void> {
     await start();
-    if (!service || networkHourlyLoading.value || networkHourly.value.days >= days) return;
-    networkHourlyLoading.value = true;
+    if (!service || citySeriesLoading.value || (!force && citySeries.value.days >= days)) return;
+    citySeriesLoading.value = true;
     try {
-      const active = service;
-      const bySensor: Record<string, HourlyPoint[]> = {};
-      await mapLimit(sensors.value, HISTORY_CONCURRENCY, async (sensor) => {
-        try {
-          bySensor[sensor.id] = await active.getHourly(sensor.id, days);
-        } catch {
-          bySensor[sensor.id] = [];
-        }
-      });
-      networkHourly.value = { days, bySensor };
+      citySeries.value = { days, points: await service.getNetworkHourly(days) };
+    } catch {
+      // Charts show their empty state; live values are unaffected.
     } finally {
-      networkHourlyLoading.value = false;
+      citySeriesLoading.value = false;
+    }
+  }
+
+  /** Makes sure one neighbourhood's hourly history covers at least `days`. */
+  async function loadPlaceSeries(
+    place: Pick<NeighborhoodSummary, 'id' | 'name'>,
+    days: number,
+    force = false,
+  ): Promise<void> {
+    await start();
+    if (!service || (!force && (placeSeries[place.id]?.days ?? 0) >= days)) return;
+    try {
+      placeSeries[place.id] = { days, points: await service.getNetworkHourly(days, place.name) };
+    } catch {
+      // Left as it was; the next refresh tries again.
+    }
+  }
+
+  /** Re-reads whatever history is on screen, so hourly charts keep moving. */
+  function refreshSeries(): void {
+    if (citySeries.value.days) void loadCitySeries(citySeries.value.days, true);
+    for (const place of neighborhoods.value) {
+      const loaded = placeSeries[place.id];
+      if (loaded) void loadPlaceSeries(place, loaded.days, true);
     }
   }
 
@@ -296,8 +328,9 @@ export const useAirStore = defineStore('air', () => {
     lastLive,
     rawHistory,
     hourlyHistory,
-    networkHourly,
-    networkHourlyLoading,
+    citySeries,
+    citySeriesLoading,
+    placeSeries,
     rows,
     city,
     neighborhoods,
@@ -311,6 +344,7 @@ export const useAirStore = defineStore('air', () => {
     loadHourly,
     fetchReadings,
     fetchHourly,
-    ensureNetworkHourly,
+    loadCitySeries,
+    loadPlaceSeries,
   };
 });

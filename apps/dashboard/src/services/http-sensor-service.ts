@@ -1,7 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 import { slugify } from '../lib/format';
 import { arabicPlaceName } from '../lib/places';
-import type { HourlyPoint, Reading, Sensor } from '../types';
+import type { HourlyPoint, NetworkHourlyPoint, Reading, Sensor } from '../types';
 import type { RealtimeHandlers, SensorService } from './sensor-service';
 
 /** Shapes the API returns (see @aq/contracts and apps/api). */
@@ -41,6 +41,16 @@ interface ApiHourlyBucket {
   avgHumidity: number;
   maxAqi: number;
   sampleCount: number;
+}
+
+interface ApiNetworkBucket {
+  bucket: string;
+  avgPm25: number;
+  avgPm10: number;
+  avgTemperature: number;
+  avgHumidity: number;
+  maxAqi: number;
+  sensorCount: number;
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -152,6 +162,20 @@ export class HttpSensorService implements SensorService {
       `/sensors/${encodeURIComponent(sensorId)}/history?days=${days}`,
     );
     return rows.map(toHourly);
+  }
+
+  async getNetworkHourly(days: number, neighborhood?: string): Promise<NetworkHourlyPoint[]> {
+    const place = neighborhood ? `&neighborhood=${encodeURIComponent(neighborhood)}` : '';
+    const rows = await this.get<ApiNetworkBucket[]>(`/overview/history?days=${days}${place}`);
+    return rows.map((b) => ({
+      time: Date.parse(b.bucket),
+      pm25: b.avgPm25,
+      pm10: b.avgPm10,
+      temperature: b.avgTemperature,
+      humidity: b.avgHumidity,
+      maxAqi: b.maxAqi,
+      sensors: b.sensorCount,
+    }));
   }
 
   subscribe({ onReading, onConnection }: RealtimeHandlers): () => void {

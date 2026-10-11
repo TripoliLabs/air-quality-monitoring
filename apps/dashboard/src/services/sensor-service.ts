@@ -1,4 +1,4 @@
-import type { DataSourceKind, HourlyPoint, Reading, Sensor } from '../types';
+import type { DataSourceKind, HourlyPoint, NetworkHourlyPoint, Reading, Sensor } from '../types';
 
 export interface RealtimeHandlers {
   /** A sensor reported. */
@@ -22,6 +22,11 @@ export interface SensorService {
   getReadings(sensorId: string, hours: number): Promise<Reading[]>;
   /** Hourly aggregates for one sensor over the last `days`, oldest first. */
   getHourly(sensorId: string, days: number): Promise<HourlyPoint[]>;
+  /**
+   * Hourly averages across the network over the last `days`, oldest first.
+   * With `neighborhood` (the name as the source spells it), only its sensors.
+   */
+  getNetworkHourly(days: number, neighborhood?: string): Promise<NetworkHourlyPoint[]>;
   /** Stream live readings. Returns a function that stops the stream. */
   subscribe(handlers: RealtimeHandlers): () => void;
 }

@@ -46,8 +46,9 @@ reading updates the headline, the map, the lists and any open chart at once.
    (the same window the API uses). A clock in the store re-evaluates this, so a
    sensor that goes quiet turns "not reporting" on its own.
 
-History is loaded on demand: raw readings for the last 24 hours of one sensor,
-hourly aggregates for longer ranges and for the network-wide charts.
+History is loaded on demand: raw readings for the last 24 hours of one sensor
+and hourly aggregates for longer ranges. City and neighborhood charts use
+`GET /overview/history`, one request each, and are re-read every five minutes.
 
 ## Layout of the code
 
@@ -114,7 +115,4 @@ language. To use another tile server, set `VITE_MAP_STYLE_LIGHT` and
 
 ## Known limits
 
-- Network-wide charts fetch hourly history per sensor (six at a time), because
-  the API has no city-wide history endpoint yet. Fine for tens of sensors; a
-  dedicated endpoint would be better at hundreds.
 - Sensor names come from the API in one language only.

@@ -3,13 +3,13 @@ import {
   groupByNeighborhood,
   hourOfDayProfile,
   mapLimit,
-  networkSeries,
   ONLINE_WINDOW_MS,
   type SensorRow,
   sensorStatus,
   summarise,
+  toSeries,
 } from '../src/lib/stats';
-import type { HourlyPoint, Reading, Sensor } from '../src/types';
+import type { NetworkHourlyPoint, Reading, Sensor } from '../src/types';
 
 const NOW = Date.UTC(2026, 9, 11, 12, 0, 0);
 const HOUR = 3_600_000;
@@ -93,37 +93,27 @@ describe('groupByNeighborhood', () => {
 });
 
 describe('network history', () => {
-  const point = (sensorId: string, hoursAgo: number, pm25: number): HourlyPoint => ({
-    sensorId,
+  const point = (hoursAgo: number, pm25: number, sensors = 3): NetworkHourlyPoint => ({
     time: NOW - hoursAgo * HOUR,
     pm25,
     pm10: pm25 * 2,
     temperature: 20,
     humidity: 50,
     maxAqi: 0,
-    samples: 12,
+    sensors,
   });
-  const bySensor = {
-    a: [point('a', 2, 10), point('a', 1, 20)],
-    b: [point('b', 2, 30), point('b', 30, 500)],
-  };
+  const points = [point(30, 500), point(2, 9), point(1, 35.4, 2)];
 
-  it('averages sensors hour by hour, oldest first, within the window', () => {
-    const series = networkSeries(bySensor, NOW - 24 * HOUR);
-    expect(series.map((p) => [p.pm25, p.sensors])).toEqual([
-      [20, 2],
-      [20, 1],
+  it('turns hourly averages into an AQI series within the window', () => {
+    expect(toSeries(points, NOW - 24 * HOUR).map((p) => [p.pm25, p.aqi, p.sensors])).toEqual([
+      [9, 50, 3],
+      [35.4, 100, 2],
     ]);
-  });
-
-  it('can be limited to some sensors', () => {
-    expect(networkSeries(bySensor, NOW - 24 * HOUR, new Set(['a'])).map((p) => p.pm25)).toEqual([
-      10, 20,
-    ]);
+    expect(toSeries(points)).toHaveLength(3);
   });
 
   it('builds a 24-slot typical day with gaps where there is no data', () => {
-    const profile = hourOfDayProfile(networkSeries(bySensor, NOW - 24 * HOUR));
+    const profile = hourOfDayProfile(toSeries(points, NOW - 24 * HOUR));
     expect(profile).toHaveLength(24);
     expect(profile.filter((slot) => slot.pm25 !== null)).toHaveLength(2);
   });

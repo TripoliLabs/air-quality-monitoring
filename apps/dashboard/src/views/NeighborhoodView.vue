@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
-import { computed, defineAsyncComponent, onMounted } from 'vue';
+import { computed, defineAsyncComponent, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AirSparkline from '../components/AirSparkline.vue';
 import AirVerdict from '../components/AirVerdict.vue';
@@ -12,7 +12,7 @@ import SkyPanel from '../components/SkyPanel.vue';
 import StateBlock from '../components/StateBlock.vue';
 import { useLocale } from '../composables/useLocale';
 import { formatClock } from '../lib/format';
-import { networkSeries } from '../lib/stats';
+import { toSeries } from '../lib/stats';
 import { useAirStore } from '../stores/air';
 
 const SensorMap = defineAsyncComponent(() => import('../components/SensorMap.vue'));
@@ -21,16 +21,22 @@ const HOUR = 3_600_000;
 const route = useRoute();
 const { t, n, locale, metricValue, metricUnit, placeName } = useLocale();
 const store = useAirStore();
-const { ready, now, lastLive, networkHourly } = storeToRefs(store);
+const { ready, now, lastLive } = storeToRefs(store);
 
 const place = computed(() => store.getNeighborhood(String(route.params.id)));
 
-onMounted(() => void store.ensureNetworkHourly(1));
+// The neighbourhood is known only once the sensors have loaded.
+watch(
+  () => place.value?.id,
+  () => {
+    if (place.value) void store.loadPlaceSeries(place.value, 1);
+  },
+  { immediate: true },
+);
 
 const trend = computed(() => {
   if (!place.value) return [];
-  const ids = new Set(place.value.rows.map((row) => row.sensor.id));
-  const series = networkSeries(networkHourly.value.bySensor, now.value - 24 * HOUR, ids);
+  const series = toSeries(store.placeSeries[place.value.id]?.points ?? [], now.value - 24 * HOUR);
   const { aqi, pm25, online } = place.value;
   if (series.length && aqi !== null && pm25 !== null) {
     series.push({ time: now.value, pm25, aqi, sensors: online });

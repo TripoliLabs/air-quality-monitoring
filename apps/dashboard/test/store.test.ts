@@ -38,6 +38,17 @@ class FakeService implements SensorService {
     reading(id, 35, NOW - 300_000),
   ]);
   getHourly = vi.fn(async () => []);
+  getNetworkHourly = vi.fn(async (_days: number, neighborhood?: string) => [
+    {
+      time: NOW - 3_600_000,
+      pm25: neighborhood ? 30 : 20,
+      pm10: 40,
+      temperature: 20,
+      humidity: 50,
+      maxAqi: 80,
+      sensors: 2,
+    },
+  ]);
   subscribe = vi.fn((handlers: RealtimeHandlers) => {
     this.handlers = handlers;
     return () => (this.handlers = null);
@@ -163,5 +174,33 @@ describe('air store', () => {
     await store.retry();
     expect(store.error).toBeNull();
     expect(store.ready).toBe(true);
+  });
+
+  it('loads network history once, and ends the city trend with the live value', async () => {
+    const store = await startStore();
+    await store.loadCitySeries(1);
+    await store.loadCitySeries(1);
+    expect(fake.getNetworkHourly).toHaveBeenCalledTimes(1);
+    expect(store.cityTrend.map((p) => p.pm25)).toEqual([20, store.city.pm25]);
+
+    // A longer range needs a new request; a shorter one does not.
+    await store.loadCitySeries(7);
+    await store.loadCitySeries(1);
+    expect(fake.getNetworkHourly).toHaveBeenCalledTimes(2);
+  });
+
+  it('loads one neighbourhood by the name the source uses', async () => {
+    const store = await startStore();
+    await store.loadPlaceSeries(store.neighborhoods[0], 1);
+    expect(fake.getNetworkHourly).toHaveBeenCalledWith(1, 'Mina');
+    expect(store.placeSeries.mina.points[0].pm25).toBe(30);
+  });
+
+  it('re-reads the history that is on screen, so hourly charts keep moving', async () => {
+    const store = await startStore();
+    await store.loadCitySeries(1);
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1000);
+    expect(fake.getNetworkHourly.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(store.citySeries.days).toBe(1);
   });
 });

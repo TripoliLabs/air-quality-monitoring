@@ -10,7 +10,7 @@ import type { ChartPoint } from '../components/TrendChart.vue';
 import { useAqi } from '../composables/useAqi';
 import { useLocale } from '../composables/useLocale';
 import { aqiCategory, pm25ToAqi } from '../lib/aqi';
-import { hourOfDayProfile, levelCounts, networkSeries } from '../lib/stats';
+import { hourOfDayProfile, levelCounts, mapLimit, toSeries } from '../lib/stats';
 import { useAirStore } from '../stores/air';
 
 const TrendChart = defineAsyncComponent(() => import('../components/TrendChart.vue'));
@@ -22,20 +22,27 @@ const HOUR = 3_600_000;
 const { t, n, metricValue, metricUnit, placeName } = useLocale();
 const aqi = useAqi();
 const store = useAirStore();
-const { neighborhoods, networkHourly, networkHourlyLoading, sensors, now } = storeToRefs(store);
+const { neighborhoods, citySeries, now } = storeToRefs(store);
 
 const range = ref<Range>('7d');
 const rangeOptions = computed(() =>
   (['24h', '7d', '30d'] as const).map((value) => ({ value, label: t(`sensor.range${value}`) })),
 );
 
-watch(range, (value) => void store.ensureNetworkHourly(RANGE_DAYS[value]), { immediate: true });
+// One request for the city, then one per neighbourhood for the comparison.
+watch(
+  [range, () => neighborhoods.value.length],
+  ([value]) => {
+    const days = RANGE_DAYS[value];
+    void store.loadCitySeries(days);
+    void mapLimit(neighborhoods.value, 4, (place) => store.loadPlaceSeries(place, days));
+  },
+  { immediate: true },
+);
 
 const since = computed(() => now.value - RANGE_DAYS[range.value] * 24 * HOUR);
-const series = computed(() => networkSeries(networkHourly.value.bySensor, since.value));
-const loading = computed(
-  () => networkHourlyLoading.value || networkHourly.value.days < RANGE_DAYS[range.value],
-);
+const series = computed(() => toSeries(citySeries.value.points, since.value));
+const loading = computed(() => citySeries.value.days < RANGE_DAYS[range.value]);
 
 const cityPoints = computed((): ChartPoint[] =>
   series.value.map((point) => ({ time: point.time, value: point.aqi })),
@@ -56,8 +63,7 @@ const share = computed(() => levelCounts(series.value, (value) => aqiCategory(va
 const compared = computed((): RankItem[] =>
   neighborhoods.value
     .map((place) => {
-      const ids = new Set(place.rows.map((row) => row.sensor.id));
-      const points = networkSeries(networkHourly.value.bySensor, since.value, ids);
+      const points = toSeries(store.placeSeries[place.id]?.points ?? [], since.value);
       const pm25 = points.length
         ? points.reduce((sum, p) => sum + p.pm25, 0) / points.length
         : null;
@@ -81,9 +87,7 @@ const compared = computed((): RankItem[] =>
       <SegmentedControl v-model="range" :options="rangeOptions" :label="t('sensor.rangeLabel')" />
     </PageHeader>
 
-    <p v-if="loading" class="text-sm text-ink-2" role="status">
-      {{ t('trends.loading', { count: n(sensors.length) }) }}
-    </p>
+    <p v-if="loading" class="text-sm text-ink-2" role="status">{{ t('trends.loading') }}</p>
 
     <section aria-labelledby="city-title" class="panel p-5 sm:p-6">
       <h2 id="city-title" class="text-xl">{{ t('trends.cityTitle') }}</h2>

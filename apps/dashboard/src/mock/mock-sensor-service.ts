@@ -1,5 +1,5 @@
 import type { RealtimeHandlers, SensorService } from '../services/sensor-service';
-import type { HourlyPoint, Reading, Sensor } from '../types';
+import type { HourlyPoint, NetworkHourlyPoint, Reading, Sensor } from '../types';
 import { hourlyHistory, lastReportTime, rawHistory, readingAt } from './model';
 import { MOCK_SENSORS, type MockSensor } from './sensors';
 
@@ -39,6 +39,34 @@ export class MockSensorService implements SensorService {
   async getHourly(sensorId: string, days: number): Promise<HourlyPoint[]> {
     const sensor = this.find(sensorId);
     return sensor ? hourlyHistory(sensor, days, Date.now()) : [];
+  }
+
+  async getNetworkHourly(days: number, neighborhood?: string): Promise<NetworkHourlyPoint[]> {
+    const now = Date.now();
+    const hours = new Map<number, HourlyPoint[]>();
+    for (const sensor of MOCK_SENSORS) {
+      if (neighborhood && sensor.neighborhood !== neighborhood) continue;
+      for (const point of hourlyHistory(sensor, days, now)) {
+        const group = hours.get(point.time);
+        if (group) group.push(point);
+        else hours.set(point.time, [point]);
+      }
+    }
+    return [...hours.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([time, points]) => {
+        const mean = (pick: (p: HourlyPoint) => number): number =>
+          points.reduce((sum, p) => sum + pick(p), 0) / points.length;
+        return {
+          time,
+          pm25: mean((p) => p.pm25),
+          pm10: mean((p) => p.pm10),
+          temperature: mean((p) => p.temperature),
+          humidity: mean((p) => p.humidity),
+          maxAqi: Math.max(...points.map((p) => p.maxAqi)),
+          sensors: points.length,
+        };
+      });
   }
 
   subscribe({ onReading, onConnection }: RealtimeHandlers): () => void {

@@ -22,7 +22,7 @@ const aqi = useAqi();
 const store = useAirStore();
 const { city, rows, neighborhoods, cityTrend, ready, lastLive } = storeToRefs(store);
 
-onMounted(() => void store.ensureNetworkHourly(1));
+onMounted(() => void store.loadCitySeries(1));
 
 const ranked = computed((): RankItem[] =>
   [...neighborhoods.value]
@@ -89,7 +89,7 @@ const trendRange = computed(() => {
                 <span>{{ trendRange.to }}</span>
               </div>
             </template>
-            <div v-else-if="!ready || store.networkHourlyLoading" class="skeleton h-[84px]" />
+            <div v-else-if="!ready || store.citySeriesLoading" class="skeleton h-[84px]" />
             <p v-else class="text-sm text-ink-3">{{ t('live.trendEmpty') }}</p>
           </div>
 

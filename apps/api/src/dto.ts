@@ -1,5 +1,6 @@
 import {
   HourlyBucketSchema,
+  NetworkHourlyBucketSchema,
   NetworkOverviewSchema,
   ReadingResponseSchema,
   SensorSchema,
@@ -14,3 +15,4 @@ export class SensorDto extends createZodDto(SensorSchema) {}
 export class ReadingResponseDto extends createZodDto(ReadingResponseSchema) {}
 export class HourlyBucketDto extends createZodDto(HourlyBucketSchema) {}
 export class NetworkOverviewDto extends createZodDto(NetworkOverviewSchema) {}
+export class NetworkHourlyBucketDto extends createZodDto(NetworkHourlyBucketSchema) {}

@@ -71,6 +71,7 @@ const endpoints = [
   { path: '/sensors/{deviceId}/readings?hours=24', key: 'readings' },
   { path: '/sensors/{deviceId}/history?days=7', key: 'history' },
   { path: '/overview', key: 'overview' },
+  { path: '/overview/history?days=7', key: 'networkHistory' },
 ] as const;
 </script>
 

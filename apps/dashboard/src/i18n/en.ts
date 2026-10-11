@@ -171,7 +171,7 @@ export default {
     compareTitle: 'Neighborhoods compared',
     compareHint: 'Average fine-particle level (PM2.5) over the selected period.',
     empty: 'Not enough history yet. Charts fill in as readings accumulate.',
-    loading: 'Loading history from {count} sensors',
+    loading: 'Loading history',
     hours: '{count} hour | {count} hours',
   },
   network: {
@@ -283,6 +283,7 @@ export default {
       readings: 'Raw readings for one sensor (up to 72 hours).',
       history: 'Hourly averages for one sensor (up to 90 days).',
       overview: 'Network-wide snapshot: sensors online, average and highest AQI.',
+      networkHistory: 'Hourly averages for the whole network, or one neighborhood (up to 90 days).',
     },
     liveTitle: 'Live stream',
     liveBody:

@@ -3,7 +3,7 @@
  * reuse from any view.
  */
 
-import type { HourlyPoint, Reading, Sensor, SensorStatus } from '../types';
+import type { NetworkHourlyPoint, Reading, Sensor, SensorStatus } from '../types';
 import { pm25ToAqi } from './aqi';
 
 /** A sensor counts as online if it reported within this window (matches the API). */
@@ -95,28 +95,16 @@ export interface SeriesPoint {
   sensors: number;
 }
 
-/** One network-wide average per hour, from per-sensor hourly aggregates. */
-export function networkSeries(
-  bySensor: Record<string, HourlyPoint[]>,
-  since: number,
-  sensorIds?: Set<string>,
-): SeriesPoint[] {
-  const buckets = new Map<number, number[]>();
-  for (const [sensorId, points] of Object.entries(bySensor)) {
-    if (sensorIds && !sensorIds.has(sensorId)) continue;
-    for (const point of points) {
-      if (point.time < since) continue;
-      const bucket = buckets.get(point.time);
-      if (bucket) bucket.push(point.pm25);
-      else buckets.set(point.time, [point.pm25]);
-    }
-  }
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([time, values]) => {
-      const pm25 = values.reduce((a, b) => a + b, 0) / values.length;
-      return { time, pm25, aqi: pm25ToAqi(pm25), sensors: values.length };
-    });
+/** Network hourly averages as an AQI series, from `since` onwards. */
+export function toSeries(points: NetworkHourlyPoint[], since = 0): SeriesPoint[] {
+  return points
+    .filter((point) => point.time >= since)
+    .map((point) => ({
+      time: point.time,
+      pm25: point.pm25,
+      aqi: pm25ToAqi(point.pm25),
+      sensors: point.sensors,
+    }));
 }
 
 export interface HourOfDay {
