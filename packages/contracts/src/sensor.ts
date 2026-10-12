@@ -39,6 +39,24 @@ export const HourlyBucketSchema = z.object({
 });
 export type HourlyBucket = z.infer<typeof HourlyBucketSchema>;
 
+/**
+ * One hour of the whole network (or one neighbourhood): the mean of each
+ * reporting sensor's hourly average, so every sensor counts once however often
+ * it sampled. Served by `GET /overview/history`.
+ */
+export const NetworkHourlyBucketSchema = z.object({
+  bucket: z.string(), // ISO timestamp (hour bucket)
+  avgPm25: z.number(),
+  avgPm10: z.number(),
+  avgTemperature: z.number(),
+  avgHumidity: z.number(),
+  maxAqi: z.number().int(),
+  /** Sensors that reported in the hour. */
+  sensorCount: z.number().int(),
+  sampleCount: z.number().int(),
+});
+export type NetworkHourlyBucket = z.infer<typeof NetworkHourlyBucketSchema>;
+
 /** Network-wide snapshot for the dashboard overview/stats bar. */
 export const NetworkOverviewSchema = z.object({
   sensorsTotal: z.number().int(),

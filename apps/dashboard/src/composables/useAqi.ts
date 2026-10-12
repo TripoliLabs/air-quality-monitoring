@@ -1,72 +1,25 @@
-/**
- * AQI utility composable
- * EPA breakpoints, categories, colors, and PrimeVue severities
- */
+import { type AqiCategory, aqiCategoryOrNull, aqiOnSolid, aqiSolid, aqiText } from '../lib/aqi';
+import { useLocale } from './useLocale';
+import { useTheme } from './usePrefs';
 
-import { calculateAQI } from '@mock/simulator';
-
-export type AqiCategory =
-  'good' | 'moderate' | 'unhealthySensitive' | 'unhealthy' | 'veryUnhealthy' | 'hazardous';
-
-export function getAqiCategory(aqi: number): AqiCategory {
-  if (aqi <= 50) return 'good';
-  if (aqi <= 100) return 'moderate';
-  if (aqi <= 150) return 'unhealthySensitive';
-  if (aqi <= 200) return 'unhealthy';
-  if (aqi <= 300) return 'veryUnhealthy';
-  return 'hazardous';
-}
-
-export function getAqiColor(aqi: number): string {
-  const category = getAqiCategory(aqi);
-  const colors: Record<AqiCategory, string> = {
-    good: '#00e400',
-    moderate: '#ffff00',
-    unhealthySensitive: '#ff7e00',
-    unhealthy: '#ff0000',
-    veryUnhealthy: '#8f3f97',
-    hazardous: '#7e0023',
-  };
-  return colors[category];
-}
-
-export function getAqiLabel(aqi: number): string {
-  const category = getAqiCategory(aqi);
-  const labels: Record<AqiCategory, string> = {
-    good: 'aqi.good',
-    moderate: 'aqi.moderate',
-    unhealthySensitive: 'aqi.unhealthySensitive',
-    unhealthy: 'aqi.unhealthy',
-    veryUnhealthy: 'aqi.veryUnhealthy',
-    hazardous: 'aqi.hazardous',
-  };
-  return labels[category];
-}
-
-export function getAqiSeverity(
-  aqi: number,
-): 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast' {
-  const category = getAqiCategory(aqi);
-  const severities: Record<
-    AqiCategory,
-    'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast'
-  > = {
-    good: 'success',
-    moderate: 'warn',
-    unhealthySensitive: 'warn',
-    unhealthy: 'danger',
-    veryUnhealthy: 'danger',
-    hazardous: 'contrast',
-  };
-  return severities[category];
-}
-
+/** AQI colours and wording for the current theme and language. */
 export function useAqi() {
+  const { theme } = useTheme();
+  const { t } = useLocale();
+
+  const category = (aqi: number | null | undefined): AqiCategory | null => aqiCategoryOrNull(aqi);
+  const id = (aqi: number | null | undefined): string => category(aqi)?.id ?? 'unknown';
+
   return {
-    calculateAQI,
-    getAqiCategory,
-    getAqiColor,
-    getAqiLabel,
-    getAqiSeverity,
+    category,
+    /** Fill colour for markers, bars and meters. */
+    solid: aqiSolid,
+    onSolid: aqiOnSolid,
+    /** Text colour that is readable on the current theme's surfaces. */
+    text: (aqi: number | null | undefined): string => aqiText(aqi, theme.value),
+    name: (aqi: number | null | undefined): string => t(`aqi.names.${id(aqi)}`),
+    shortName: (aqi: number | null | undefined): string => t(`aqi.short.${id(aqi)}`),
+    advice: (aqi: number | null | undefined): string =>
+      category(aqi) ? t(`aqi.advice.${id(aqi)}`) : '',
   };
 }

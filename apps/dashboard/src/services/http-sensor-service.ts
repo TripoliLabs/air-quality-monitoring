@@ -1,104 +1,208 @@
-import type { SensorDefinition } from '@mock/sensors';
-import type { SensorReading } from '@mock/simulator';
-import axios, { type AxiosInstance } from 'axios';
 import { io, type Socket } from 'socket.io-client';
-import type { SensorService } from './sensor-service';
+import { slugify } from '../lib/format';
+import { arabicPlaceName } from '../lib/places';
+import type { HourlyPoint, NetworkHourlyPoint, Reading, Sensor } from '../types';
+import type { RealtimeHandlers, SensorService } from './sensor-service';
 
-/** Shapes returned by the API (see @aq/contracts). */
+/** Shapes the API returns (see @aq/contracts and apps/api). */
 interface ApiSensor {
   id: string;
   deviceId: string;
   name: string;
   latitude: number;
   longitude: number;
-  neighborhood?: string;
+  neighborhood?: string | null;
   isActive: boolean;
+  installDate?: string | null;
 }
+
 interface ApiReading {
+  /** Raw rows carry `time`; cached and live readings carry `timestamp`. */
   time?: string;
   timestamp?: string;
-  sensorId: string;
+  sensorId?: string;
+  deviceId?: string;
   pm25: number;
   pm10: number;
   temperature: number;
   humidity: number;
+  pressure?: number | null;
   aqi: number;
-  batteryMv?: number;
-  signalStrength?: number;
+  batteryMv?: number | null;
+  signalStrength?: number | null;
 }
 
-const slug = (s: string): string =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+interface ApiHourlyBucket {
+  sensorId: string;
+  bucket: string;
+  avgPm25: number;
+  avgPm10: number;
+  avgTemperature: number;
+  avgHumidity: number;
+  maxAqi: number;
+  sampleCount: number;
+}
 
-function toDefinition(s: ApiSensor): SensorDefinition {
-  const neighborhood = s.neighborhood ?? 'Unknown';
+interface ApiNetworkBucket {
+  bucket: string;
+  avgPm25: number;
+  avgPm10: number;
+  avgTemperature: number;
+  avgHumidity: number;
+  maxAqi: number;
+  sensorCount: number;
+}
+
+const REQUEST_TIMEOUT_MS = 12_000;
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+// Device identifiers are hex DevEUIs; compare them case-insensitively.
+const key = (deviceId: string): string => deviceId.toLowerCase();
+
+export function toSensor(s: ApiSensor): Sensor {
+  const neighborhood = s.neighborhood?.trim() || null;
   return {
-    id: s.deviceId, // readings are keyed by DevEUI
+    id: key(s.deviceId),
     name: s.name,
-    nameAr: s.name,
-    neighborhoodId: slug(neighborhood),
-    location: {
-      latitude: s.latitude,
-      longitude: s.longitude,
-      neighborhood,
-      neighborhoodAr: neighborhood,
-    },
-    status: s.isActive ? 'online' : 'offline',
-    installDate: '',
-    basePm25: { min: 0, max: 100 },
+    neighborhood,
+    neighborhoodAr: neighborhood ? arabicPlaceName(neighborhood) : undefined,
+    neighborhoodId: slugify(neighborhood ?? ''),
+    latitude: s.latitude,
+    longitude: s.longitude,
+    isActive: s.isActive,
+    installDate: s.installDate ?? undefined,
   };
 }
 
-function toReading(r: ApiReading): SensorReading {
+export function toReading(r: ApiReading): Reading | null {
+  const sensorId = r.sensorId ?? r.deviceId;
+  const time = Date.parse(r.time ?? r.timestamp ?? '');
+  if (!sensorId || Number.isNaN(time)) return null;
   return {
-    sensorId: r.sensorId,
-    timestamp: new Date(r.time ?? r.timestamp ?? Date.now()),
-    pm2_5: r.pm25,
+    sensorId: key(sensorId),
+    time,
+    pm25: r.pm25,
     pm10: r.pm10,
     temperature: r.temperature,
     humidity: r.humidity,
-    batteryMv: r.batteryMv ?? 0,
-    signalStrength: r.signalStrength ?? 0,
+    pressure: r.pressure ?? undefined,
     aqi: r.aqi,
+    batteryMv: r.batteryMv ?? undefined,
+    signalStrength: r.signalStrength ?? undefined,
   };
 }
 
-/** Live backend implementation: REST for history/metadata, Socket.IO for realtime. */
+function toHourly(b: ApiHourlyBucket): HourlyPoint {
+  return {
+    sensorId: key(b.sensorId),
+    time: Date.parse(b.bucket),
+    pm25: b.avgPm25,
+    pm10: b.avgPm10,
+    temperature: b.avgTemperature,
+    humidity: b.avgHumidity,
+    maxAqi: b.maxAqi,
+    samples: b.sampleCount,
+  };
+}
+
+const isReading = (r: Reading | null): r is Reading => r !== null;
+
+/** The live backend: REST for metadata and history, Socket.IO for readings as they land. */
 export class HttpSensorService implements SensorService {
-  private readonly http: AxiosInstance;
-  private socket: Socket | null = null;
+  readonly kind = 'api' as const;
 
-  constructor(private readonly baseUrl: string) {
-    this.http = axios.create({ baseURL: baseUrl, timeout: 10_000 });
+  constructor(
+    private readonly apiBase: string,
+    private readonly socketUrl: string | undefined,
+  ) {}
+
+  private async get<T>(path: string): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.apiBase}${path}`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (cause) {
+      throw new ApiError(cause instanceof Error ? cause.message : 'Network request failed');
+    }
+    if (!response.ok) {
+      throw new ApiError(`${response.status} ${response.statusText}`, response.status);
+    }
+    return (await response.json()) as T;
   }
 
-  async getSensors(): Promise<SensorDefinition[]> {
-    const { data } = await this.http.get<ApiSensor[]>('/sensors');
-    return data.map(toDefinition);
+  async getSensors(): Promise<Sensor[]> {
+    return (await this.get<ApiSensor[]>('/sensors')).map(toSensor);
   }
 
-  async getHistory(deviceId: string, hours = 24): Promise<SensorReading[]> {
-    const { data } = await this.http.get<ApiReading[]>(`/sensors/${deviceId}/readings`, {
-      params: { hours },
+  async getLatest(): Promise<Reading[]> {
+    return (await this.get<ApiReading[]>('/sensors/latest')).map(toReading).filter(isReading);
+  }
+
+  async getReadings(sensorId: string, hours: number): Promise<Reading[]> {
+    const rows = await this.get<ApiReading[]>(
+      `/sensors/${encodeURIComponent(sensorId)}/readings?hours=${hours}`,
+    );
+    // The API returns newest first; the dashboard wants chronological.
+    return rows.map(toReading).filter(isReading).reverse();
+  }
+
+  async getHourly(sensorId: string, days: number): Promise<HourlyPoint[]> {
+    const rows = await this.get<ApiHourlyBucket[]>(
+      `/sensors/${encodeURIComponent(sensorId)}/history?days=${days}`,
+    );
+    return rows.map(toHourly);
+  }
+
+  async getNetworkHourly(days: number, neighborhood?: string): Promise<NetworkHourlyPoint[]> {
+    const place = neighborhood ? `&neighborhood=${encodeURIComponent(neighborhood)}` : '';
+    const rows = await this.get<ApiNetworkBucket[]>(`/overview/history?days=${days}${place}`);
+    return rows.map((b) => ({
+      time: Date.parse(b.bucket),
+      pm25: b.avgPm25,
+      pm10: b.avgPm10,
+      temperature: b.avgTemperature,
+      humidity: b.avgHumidity,
+      maxAqi: b.maxAqi,
+      sensors: b.sensorCount,
+    }));
+  }
+
+  async getServerTime(): Promise<number> {
+    const { updatedAt } = await this.get<{ updatedAt: string }>('/overview');
+    const time = Date.parse(updatedAt);
+    if (Number.isNaN(time)) throw new ApiError('The server did not report its time');
+    return time;
+  }
+
+  subscribe({ onReading, onConnection }: RealtimeHandlers): () => void {
+    // Socket.IO reconnects on its own with backoff; the store falls back to
+    // polling while the channel is down.
+    const socket: Socket = this.socketUrl
+      ? io(this.socketUrl, { transports: ['websocket', 'polling'] })
+      : io({ transports: ['websocket', 'polling'] });
+
+    socket.on('connect', () => onConnection(true));
+    socket.on('disconnect', () => onConnection(false));
+    socket.on('connect_error', () => onConnection(false));
+    socket.on('reading', (payload: ApiReading) => {
+      const reading = toReading(payload);
+      if (reading) onReading(reading);
     });
-    // API returns newest-first; the dashboard wants chronological.
-    return data.map(toReading).reverse();
-  }
 
-  subscribe(onReading: (reading: SensorReading) => void): () => void {
-    this.socket = io(this.baseUrl, { transports: ['websocket'] });
-    this.socket.on('reading', (payload: ApiReading) => onReading(toReading(payload)));
     return () => {
-      this.socket?.disconnect();
-      this.socket = null;
+      socket.removeAllListeners();
+      socket.disconnect();
     };
-  }
-
-  dispose(): void {
-    this.socket?.disconnect();
-    this.socket = null;
   }
 }

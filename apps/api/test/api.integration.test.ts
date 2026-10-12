@@ -3,7 +3,9 @@
  * exercising the real NestJS app, TimescaleDB, relational DB and Redis.
  *   pnpm --filter @aq/api test:integration
  */
+import { NetworkHourlyBucketSchema } from '@aq/contracts';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 const API = process.env.API_URL ?? 'http://localhost:3000';
 
@@ -116,5 +118,46 @@ describe('API integration', () => {
     expect(o.sensorsTotal as number).toBeGreaterThanOrEqual(6);
     expect(o.sensorsOnline as number).toBeLessThanOrEqual(o.sensorsTotal as number);
     expect(['number', 'object']).toContain(typeof o.avgAqi); // number | null
+  });
+
+  it('GET /overview/history returns network-wide hourly buckets (chronological)', async () => {
+    const res = await get('/overview/history?days=7');
+    expect(res.status).toBe(200);
+    const buckets = z.array(NetworkHourlyBucketSchema).parse(await res.json());
+    const total = ((await (await get('/sensors')).json()) as unknown[]).length;
+    for (let i = 0; i < buckets.length; i++) {
+      expect(buckets[i].sensorCount).toBeGreaterThanOrEqual(1);
+      expect(buckets[i].sensorCount).toBeLessThanOrEqual(total);
+      if (i > 0) {
+        expect(Date.parse(buckets[i].bucket)).toBeGreaterThan(Date.parse(buckets[i - 1].bucket));
+      }
+    }
+  });
+
+  it('GET /overview/history can be limited to one neighbourhood', async () => {
+    const sensors = (await (await get('/sensors')).json()) as Array<{ neighborhood?: string }>;
+    const neighborhood = sensors.find((s) => s.neighborhood)?.neighborhood as string;
+    const inPlace = sensors.filter((s) => s.neighborhood === neighborhood).length;
+
+    const res = await get(`/overview/history?days=7&neighborhood=${encodeURIComponent(neighborhood)}`);
+    expect(res.status).toBe(200);
+    const buckets = z.array(NetworkHourlyBucketSchema).parse(await res.json());
+    for (const bucket of buckets) expect(bucket.sensorCount).toBeLessThanOrEqual(inPlace);
+  });
+
+  it('GET /overview/history matches a neighbourhood whatever its case or spacing', async () => {
+    const sensors = (await (await get('/sensors')).json()) as Array<{ neighborhood?: string }>;
+    const neighborhood = sensors.find((s) => s.neighborhood)?.neighborhood as string;
+    const exact = await (await get(`/overview/history?neighborhood=${encodeURIComponent(neighborhood)}`)).json();
+    const loose = await (
+      await get(`/overview/history?neighborhood=${encodeURIComponent(`  ${neighborhood.toUpperCase()} `)}`)
+    ).json();
+    expect((loose as unknown[]).length).toBe((exact as unknown[]).length);
+  });
+
+  it('GET /overview/history is empty for a neighbourhood with no sensors', async () => {
+    const res = await get('/overview/history?neighborhood=No%20Such%20Place');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
   });
 });
