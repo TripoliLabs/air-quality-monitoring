@@ -212,8 +212,9 @@ device-profile, gateway, the 6 fixture devices + root AppKeys) over its gRPC/RES
 API, performs a real **OTAA join** per device, then streams data. Root AppKeys
 are stored in a **Docker volume (`lorawan_keys`), never the repo**. The dashboard
 reads the backend through `apps/dashboard/src/services` (HTTP + WS). A production
-build always uses the live API and does not bundle the mock; `pnpm dev` falls
-back to the in-browser mock when `VITE_API_URL` is unset (see
+build always uses the live API and does not bundle the mock. Locally the
+in-browser mock is the default, both for `pnpm dev` and for the compose
+dashboard; set `VITE_DATA_SOURCE=api` to show the live pipeline instead (see
 [`apps/dashboard/README.md`](apps/dashboard/README.md)).
 
 > ChirpStack config lives in `edge/chirpstack/` (`chirpstack.toml` +

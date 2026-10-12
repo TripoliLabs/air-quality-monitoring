@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * A piece of sky: the surface the breeze drifts across. Its wash takes on the
- * colour of the current air quality, so the panel reads at a glance before any
- * number does.
+ * A piece of sky. Its wash takes on the colour of the current air quality, so
+ * the panel reads at a glance before any number does. On the home page the
+ * breeze drifts across it too.
  */
 import { computed } from 'vue';
 import { aqiCategoryOrNull } from '../lib/aqi';
@@ -11,11 +11,12 @@ import BreezeCanvas from './BreezeCanvas.vue';
 const props = withDefaults(
   defineProps<{
     aqi?: number | null;
-    density?: number;
+    /** Draw moving air over the panel. Home page only. */
+    breeze?: boolean;
     /** Square off the corners (full-bleed bands). */
     flush?: boolean;
   }>(),
-  { aqi: null, density: 1, flush: false },
+  { aqi: null, breeze: false, flush: false },
 );
 
 const category = computed(() => aqiCategoryOrNull(props.aqi));
@@ -39,7 +40,7 @@ const wash = computed(() => {
       class="absolute inset-0 -z-10 transition-[background] duration-1000 rtl:-scale-x-100"
       :style="wash"
     />
-    <BreezeCanvas class="-z-10" :haze="haze" :tint="tint" :density="density" />
+    <BreezeCanvas v-if="breeze" class="-z-10" :haze="haze" :tint="tint" :density="1.25" />
     <slot />
   </div>
 </template>

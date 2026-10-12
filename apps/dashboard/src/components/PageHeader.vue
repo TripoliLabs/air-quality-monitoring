@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * The top of every inner page: a slim band of the same sky as the home hero,
- * with a thinner breeze, tinted by the city's current air.
+ * tinted by the city's current air.
  */
 import { storeToRefs } from 'pinia';
 import { useAirStore } from '../stores/air';
@@ -12,7 +12,7 @@ const { city } = storeToRefs(useAirStore());
 </script>
 
 <template>
-  <SkyPanel :aqi="city.aqi" :density="0.45">
+  <SkyPanel :aqi="city.aqi">
     <div
       class="flex flex-col gap-4 px-5 py-7 sm:px-8 sm:py-9 lg:flex-row lg:items-end lg:justify-between"
     >
