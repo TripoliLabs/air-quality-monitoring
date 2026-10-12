@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import AqiMeter from '../components/AqiMeter.vue';
+import BreezeCanvas from '../components/BreezeCanvas.vue';
 import LiveIndicator from '../components/LiveIndicator.vue';
 import SkyPanel from '../components/SkyPanel.vue';
 import { useAqi } from '../composables/useAqi';
@@ -12,6 +13,8 @@ import { useAirStore } from '../stores/air';
 const { t, n } = useLocale();
 const aqi = useAqi();
 const { city, neighborhoods, ready } = storeToRefs(useAirStore());
+
+const air = computed(() => aqi.category(city.value.aqi));
 
 const steps = ['measure', 'send', 'process', 'show'] as const;
 const built = ['solar', 'radio', 'open'] as const;
@@ -29,7 +32,15 @@ const stats = computed(() => [
 
 <template>
   <div>
-    <SkyPanel :aqi="city.aqi" :density="1.25" flush class="border-b">
+    <!-- The same air as the hero, fainter, behind the rest of the page. -->
+    <BreezeCanvas
+      backdrop
+      class="-z-10 opacity-60"
+      :density="0.45"
+      :haze="air ? (air.level - 1) / 5 : null"
+      :tint="air?.solid ?? null"
+    />
+    <SkyPanel :aqi="city.aqi" breeze flush class="border-b">
       <div
         class="shell grid grid-cols-1 gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end lg:gap-16 lg:py-24"
       >

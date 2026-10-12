@@ -1,22 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import BreezeCanvas from './components/BreezeCanvas.vue';
 import AppFooter from './components/AppFooter.vue';
 import AppHeader from './components/AppHeader.vue';
 import AppTabBar from './components/AppTabBar.vue';
 import StateBlock from './components/StateBlock.vue';
 import { useLocale } from './composables/useLocale';
-import { aqiCategoryOrNull } from './lib/aqi';
 import { applyTitle } from './router';
 import { useAirStore } from './stores/air';
 
 const { t, locale } = useLocale();
 const route = useRoute();
 const store = useAirStore();
-
-// The backdrop carries the city's air: calm when clean, a tinted haze when not.
-const cityAir = computed(() => aqiCategoryOrNull(store.city.aqi));
 
 // The tab title is text too: re-translate it when the language changes.
 watch(locale, () => applyTitle(route.meta.title, t));
@@ -32,14 +27,6 @@ onMounted(() => void store.start());
   >
     {{ t('app.skipToContent') }}
   </a>
-
-  <BreezeCanvas
-    backdrop
-    class="-z-10"
-    :density="0.6"
-    :haze="cityAir ? (cityAir.level - 1) / 5 : null"
-    :tint="cityAir?.solid ?? null"
-  />
 
   <div class="flex min-h-dvh flex-col">
     <!-- Only ever rendered by a development build using the local mock. -->

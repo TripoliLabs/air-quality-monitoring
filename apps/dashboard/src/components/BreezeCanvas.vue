@@ -8,9 +8,10 @@
  * city: when it is clean the motes are few, small and quick; as it gets worse
  * they thicken into a slow haze tinted with the AQI colour.
  *
- * It is used two ways: as the fixed backdrop of the whole app, and inside the
- * sky panels. It never takes pointer events, it stops when off screen or in a
- * background tab, and with "reduce motion" it is one still frame.
+ * It belongs to the home page only: at full strength in the hero, and as a
+ * fainter fixed backdrop behind the rest of that page. It never takes pointer
+ * events and it stops when off screen or in a background tab. With "reduce
+ * motion" the air still drifts, at half pace and without gusts or the swirl.
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -20,7 +21,7 @@ const props = withDefaults(
     haze?: number | null;
     /** AQI colour mixed into some of the motes. */
     tint?: string | null;
-    /** Scales the number of motes; slim page headers and the backdrop use less. */
+    /** Scales the number of motes; the backdrop uses less. */
     density?: number;
     /** Fill the viewport behind the page instead of the parent element. */
     backdrop?: boolean;
@@ -154,11 +155,12 @@ function step(dt: number): void {
   // The wind keeps its heading but wanders a little, and breathes in strength.
   if (Math.random() < dt * 0.3) windTarget = (Math.random() - 0.5) * 0.6;
   windAngle += (windTarget - windAngle) * Math.min(1, dt * 0.6);
-  const strength = (46 - haze * 28) * (1 + Math.sin(clock * 0.5) * 0.3);
+  const calm = reducedMotion.matches;
+  const strength = (100 - haze * 45) * (1 + Math.sin(clock * 0.5) * 0.3) * (calm ? 0.5 : 1);
   const windX = Math.cos(windAngle) * strength;
   const windY = Math.sin(windAngle) * strength * 0.3;
 
-  if (gusts.length < MAX_GUSTS && Math.random() < dt * 1.2) {
+  if (!calm && gusts.length < MAX_GUSTS && Math.random() < dt * 1.2) {
     gusts.push({
       x: Math.random() * width,
       y: Math.random() * height,
@@ -172,7 +174,7 @@ function step(dt: number): void {
   for (const gust of gusts) gust.age += dt;
   gusts = gusts.filter((gust) => gust.age < gust.life);
 
-  const stirred = performance.now() < pointerUntil;
+  const stirred = !calm && performance.now() < pointerUntil;
   const ease = Math.min(1, dt * 2.4);
 
   for (const m of motes) {
@@ -289,7 +291,7 @@ function tick(time: number): void {
 }
 
 function running(): boolean {
-  return visible && document.visibilityState === 'visible' && !reducedMotion.matches;
+  return visible && document.visibilityState === 'visible';
 }
 
 function sync(): void {
@@ -333,7 +335,6 @@ onMounted(() => {
   });
   themeObserver.observe(document.documentElement, { attributeFilter: ['data-theme'] });
   document.addEventListener('visibilitychange', sync);
-  reducedMotion.addEventListener('change', sync);
   window.addEventListener('pointermove', onPointerMove, { passive: true });
   sync();
 });
@@ -345,7 +346,7 @@ watch(
   },
 );
 
-// With motion off there is no loop to pick up a new haze level; redraw once.
+// While paused there is no loop to pick up a new haze level; redraw once.
 watch(
   () => [props.haze, props.tint],
   () => {
@@ -364,7 +365,6 @@ onBeforeUnmount(() => {
   intersectionObserver?.disconnect();
   themeObserver?.disconnect();
   document.removeEventListener('visibilitychange', sync);
-  reducedMotion.removeEventListener('change', sync);
   window.removeEventListener('pointermove', onPointerMove);
 });
 </script>
