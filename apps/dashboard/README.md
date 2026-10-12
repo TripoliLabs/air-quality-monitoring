@@ -20,6 +20,8 @@ pnpm --filter @aq/dashboard build    # type-check and production build
 | `pnpm dev`, nothing configured                       | In-browser mock. A dark strip at the top says so.          |
 | `pnpm dev` with `VITE_API_URL=http://localhost:3000` | The live API at that address.                              |
 | `pnpm dev` with `VITE_DATA_SOURCE=api`               | The live API through the dev proxy (`/api`, `/socket.io`). |
+| `docker compose up`                                  | In-browser mock, like `pnpm dev`.                          |
+| `VITE_DATA_SOURCE=api docker compose up`             | The live API from the same compose stack.                  |
 | Any production build                                 | The live API, always.                                      |
 
 A production build cannot show simulated data: the mock is loaded behind
