@@ -1,4 +1,9 @@
-import type { HourlyBucket, ReadingResponse, Sensor, SensorStatus } from '@aq/contracts';
+import {
+  type HourlyBucket,
+  type ReadingResponse,
+  SENSOR_STATUSES,
+  type Sensor,
+} from '@aq/contracts';
 import { readings, type TelemetryDb } from '@aq/db';
 import {
   Body,
@@ -30,6 +35,7 @@ import { TELEMETRY_DB } from '../database/database.module';
 import {
   CreateSensorDto,
   HourlyBucketDto,
+  ListSensorsQueryDto,
   ReadingResponseDto,
   SensorDto,
   UpdateSensorDto,
@@ -50,29 +56,24 @@ export class SensorsController {
 
   @Get()
   @ApiOperation({ summary: 'List all sensors with their metadata' })
-  @ApiQuery({ name: 'status', required: false, enum: ['active', 'maintenance', 'retired'] })
+  @ApiQuery({ name: 'status', required: false, enum: SENSOR_STATUSES })
   @ApiQuery({ name: 'includeSimulated', required: false, type: Boolean })
   @ApiOkResponse({ type: SensorDto, isArray: true })
-  async findAll(
-    @Query('status') status?: SensorStatus,
-    @Query('includeSimulated') includeSimulated?: string,
-  ): Promise<Sensor[]> {
-    const shouldIncludeSimulated =
-      includeSimulated !== undefined ? includeSimulated === 'true' : true;
+  async findAll(@Query() query: ListSensorsQueryDto): Promise<Sensor[]> {
     return this.sensorsService.findAll({
-      status,
-      includeSimulated: shouldIncludeSimulated,
+      status: query.status,
+      includeSimulated: query.includeSimulated,
     });
   }
 
-  /** Latest reading for every sensor (bulk), served from the Redis cache. */
+  /** Latest reading for every active sensor (bulk), served from the Redis cache. */
   @Get('latest')
-  @ApiOperation({ summary: 'Latest reading for every sensor (bulk)' })
+  @ApiOperation({ summary: 'Latest reading for every active sensor (bulk)' })
   @ApiOkResponse({ type: ReadingResponseDto, isArray: true })
   async latestAll(): Promise<ReadingResponse[]> {
-    const all = await this.sensorsService.findAll();
-    if (all.length === 0) return [];
-    const cached = await this.redis.mget(all.map((r) => LATEST_KEY(r.deviceId)));
+    const deviceIds = await this.sensorsService.findActiveDeviceIds();
+    if (deviceIds.length === 0) return [];
+    const cached = await this.redis.mget(deviceIds.map((id) => LATEST_KEY(id)));
     return cached
       .filter((v): v is string => v !== null)
       .map((v) => JSON.parse(v) as ReadingResponse);

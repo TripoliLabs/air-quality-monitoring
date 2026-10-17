@@ -41,6 +41,45 @@ describe('SensorsService', () => {
     );
   });
 
+  describe('findAll', () => {
+    it('queries all sensors without where clause when no options are given', async () => {
+      const selectChain = {
+        from: vi.fn().mockResolvedValue([sampleSensorRow]),
+      };
+      (mockRelational.select as any).mockReturnValue(selectChain);
+
+      const list = await service.findAll();
+      expect(list).toHaveLength(1);
+      expect(list[0].deviceId).toBe('2cbcbbfffea945c4');
+    });
+
+    it('applies SQL where clause when status or includeSimulated filter is provided', async () => {
+      const whereMock = vi.fn().mockResolvedValue([sampleSensorRow]);
+      const selectChain = {
+        from: vi.fn().mockReturnValue({ where: whereMock }),
+      };
+      (mockRelational.select as any).mockReturnValue(selectChain);
+
+      const list = await service.findAll({ status: 'active', includeSimulated: false });
+      expect(whereMock).toHaveBeenCalledTimes(1);
+      expect(list).toHaveLength(1);
+    });
+  });
+
+  describe('findActiveDeviceIds', () => {
+    it('selects only deviceId of active sensors', async () => {
+      const whereMock = vi.fn().mockResolvedValue([{ deviceId: '2cbcbbfffea945c4' }]);
+      const selectChain = {
+        from: vi.fn().mockReturnValue({ where: whereMock }),
+      };
+      (mockRelational.select as any).mockReturnValue(selectChain);
+
+      const ids = await service.findActiveDeviceIds();
+      expect(whereMock).toHaveBeenCalledTimes(1);
+      expect(ids).toEqual(['2cbcbbfffea945c4']);
+    });
+  });
+
   describe('findByDeviceId', () => {
     it('returns formatted sensor when found', async () => {
       const selectChain = {
@@ -70,17 +109,12 @@ describe('SensorsService', () => {
   });
 
   describe('create', () => {
-    it('creates and returns a new sensor', async () => {
-      const existingCheck = {
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([]), // no existing conflict
-      };
+    it('creates and returns a new sensor atomically', async () => {
       const insertChain = {
         values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([sampleSensorRow]),
       };
-      (mockRelational.select as any).mockReturnValue(existingCheck);
       (mockRelational.insert as any).mockReturnValue(insertChain);
 
       const result = await service.create({
@@ -95,15 +129,16 @@ describe('SensorsService', () => {
 
       expect(result.deviceId).toBe('2cbcbbfffea945c4');
       expect(mockRelational.insert).toHaveBeenCalled();
+      expect(insertChain.onConflictDoNothing).toHaveBeenCalled();
     });
 
     it('throws ConflictException if deviceId is already registered', async () => {
-      const existingCheck = {
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ id: 'existing-id' }]),
+      const insertChain = {
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
       };
-      (mockRelational.select as any).mockReturnValue(existingCheck);
+      (mockRelational.insert as any).mockReturnValue(insertChain);
 
       await expect(
         service.create({
@@ -128,11 +163,13 @@ describe('SensorsService', () => {
       const updateChain = {
         set: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
-          ...sampleSensorRow,
-          status: 'retired',
-          isActive: false,
-        }]),
+        returning: vi.fn().mockResolvedValue([
+          {
+            ...sampleSensorRow,
+            status: 'retired',
+            isActive: false,
+          },
+        ]),
       };
       (mockRelational.select as any).mockReturnValue(selectChain);
       (mockRelational.update as any).mockReturnValue(updateChain);
@@ -140,6 +177,32 @@ describe('SensorsService', () => {
       const retired = await service.retire('2cbcbbfffea945c4');
       expect(retired.status).toBe('retired');
       expect(retired.isActive).toBe(false);
+    });
+  });
+
+  describe('findUnregistered', () => {
+    it('excludes registered sensors in SQL and maps aggregate results', async () => {
+      const selectChain = {
+        from: vi.fn().mockResolvedValue([{ deviceId: '70b3d57ed0060001' }]),
+      };
+      (mockRelational.select as any).mockReturnValue(selectChain);
+      (mockTelemetry.execute as any).mockResolvedValue([
+        {
+          deviceId: '2cbcbbfffea945c4',
+          lastSeen: '2026-10-10T18:00:00.000Z',
+          readingCount: 12,
+        },
+      ]);
+
+      const unregistered = await service.findUnregistered();
+      expect(unregistered).toEqual([
+        {
+          deviceId: '2cbcbbfffea945c4',
+          lastSeen: '2026-10-10T18:00:00.000Z',
+          readingCount: 12,
+        },
+      ]);
+      expect(mockTelemetry.execute).toHaveBeenCalledTimes(1);
     });
   });
 });

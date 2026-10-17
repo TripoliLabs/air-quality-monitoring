@@ -52,4 +52,15 @@ describe('AdminApiKeyGuard', () => {
     const ctx = createMockContext({ 'x-api-key': 'any-key' });
     expect(() => unconfiguredGuard.canActivate(ctx)).toThrow(UnauthorizedException);
   });
+
+  it('refuses the known dev-admin-key when NODE_ENV is production', () => {
+    const prodGuard = new AdminApiKeyGuard(
+      new ConfigService({
+        NODE_ENV: 'production',
+        ADMIN_API_KEY: 'dev-admin-key',
+      }),
+    );
+    const ctx = createMockContext({ 'x-api-key': 'dev-admin-key' });
+    expect(() => prodGuard.canActivate(ctx)).toThrow(UnauthorizedException);
+  });
 });

@@ -35,8 +35,6 @@ async function main(): Promise<void> {
         latitude: sql`excluded.latitude`,
         longitude: sql`excluded.longitude`,
         neighborhood: sql`excluded.neighborhood`,
-        status: sql`excluded.status`,
-        isActive: sql`excluded.is_active`,
         isSimulated: sql`excluded.is_simulated`,
         updatedAt: sql`now()`,
       },

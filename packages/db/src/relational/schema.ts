@@ -1,3 +1,4 @@
+import { SENSOR_STATUSES } from '@aq/contracts';
 import {
   boolean,
   doublePrecision,
@@ -10,9 +11,6 @@ import {
 
 /** Relational app data — lives on self-hosted PostgreSQL (see deployment-and-strategy.md). */
 
-export const sensorStatusEnum = ['active', 'maintenance', 'retired'] as const;
-export type SensorStatus = (typeof sensorStatusEnum)[number];
-
 export const sensors = pgTable('sensors', {
   id: uuid('id').primaryKey().defaultRandom(),
   deviceId: text('device_id').notNull().unique(),
@@ -21,7 +19,7 @@ export const sensors = pgTable('sensors', {
   latitude: doublePrecision('latitude').notNull(),
   longitude: doublePrecision('longitude').notNull(),
   neighborhood: text('neighborhood'),
-  status: text('status', { enum: sensorStatusEnum }).notNull().default('active'),
+  status: text('status', { enum: SENSOR_STATUSES }).notNull().default('active'),
   isActive: boolean('is_active').notNull().default(true),
   installedAt: timestamp('installed_at', { withTimezone: true }),
   isSimulated: boolean('is_simulated').notNull().default(false),

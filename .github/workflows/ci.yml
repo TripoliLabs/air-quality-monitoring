@@ -74,6 +74,8 @@ jobs:
 
       - name: Start the slim stack (api + ingestion + their stores + migrations)
         run: docker compose up -d --build api ingestion
+        env:
+          ADMIN_API_KEY: "ci-test-admin-key"
 
       - name: Wait for the API to be healthy
         run: |
@@ -88,7 +90,7 @@ jobs:
       - name: API integration tests
         run: pnpm --filter @aq/api run test:integration
         env:
-          ADMIN_API_KEY: "dev-admin-key"
+          ADMIN_API_KEY: "ci-test-admin-key"
 
       - name: Ingestion integration tests
         run: pnpm --filter @aq/ingestion run test:integration

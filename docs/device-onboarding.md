@@ -133,6 +133,7 @@ curl -X PATCH "https://api.tripoliair.org/sensors/2cbcbbfffea945c4" \
     "status": "maintenance"
   }'
 ```
+Setting `status = "maintenance"` sets `isActive = false`, excluding the sensor from `/sensors/latest` and `/overview` calculations until it is returned to `"active"`.
 
 ### Retiring a Sensor
 When a sensor is permanently decommissioned:
@@ -140,7 +141,7 @@ When a sensor is permanently decommissioned:
 curl -X DELETE "https://api.tripoliair.org/sensors/2cbcbbfffea945c4" \
   -H "X-API-Key: ${ADMIN_API_KEY}"
 ```
-This performs a safe soft-retirement: sets `status = "retired"` and `isActive = false`, preserving historical telemetry data while removing the sensor from active network alerts and map calculations.
+This performs a safe soft-retirement: sets `status = "retired"` and `isActive = false`, preserving historical telemetry data while excluding the sensor from `/sensors/latest`, `/overview` aggregations, and active network alerts.
 
 ---
 

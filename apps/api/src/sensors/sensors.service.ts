@@ -1,7 +1,7 @@
 import type { Sensor, SensorStatus } from '@aq/contracts';
 import { type RelationalDb, sensors, type TelemetryDb } from '@aq/db';
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, type SQL, sql } from 'drizzle-orm';
 import { RELATIONAL_DB, TELEMETRY_DB } from '../database/database.module';
 import type { CreateSensorDto, UpdateSensorDto } from '../dto';
 
@@ -19,24 +19,36 @@ export class SensorsService {
   ) {}
 
   /**
-   * List all sensors. Can optionally filter by status or simulation flag.
+   * List all sensors. Can optionally filter by status or simulation flag in SQL.
    */
   async findAll(options?: {
     status?: SensorStatus;
     includeSimulated?: boolean;
   }): Promise<Sensor[]> {
-    const query = this.relational.select().from(sensors);
-    const rows = await query;
-
-    let filtered = rows;
+    const conditions: SQL[] = [];
     if (options?.status) {
-      filtered = filtered.filter((r) => r.status === options.status);
+      conditions.push(eq(sensors.status, options.status));
     }
     if (options?.includeSimulated === false) {
-      filtered = filtered.filter((r) => !r.isSimulated);
+      conditions.push(eq(sensors.isSimulated, false));
     }
 
-    return filtered.map(this.toSensorResponse);
+    const baseQuery = this.relational.select().from(sensors);
+    const rows =
+      conditions.length > 0 ? await baseQuery.where(and(...conditions)) : await baseQuery;
+
+    return rows.map(this.toSensorResponse);
+  }
+
+  /**
+   * Return only the DevEUIs of active sensors (used by hot read paths like `/sensors/latest`).
+   */
+  async findActiveDeviceIds(): Promise<string[]> {
+    const rows = await this.relational
+      .select({ deviceId: sensors.deviceId })
+      .from(sensors)
+      .where(eq(sensors.status, 'active'));
+    return rows.map((r) => r.deviceId);
   }
 
   /**
@@ -62,18 +74,8 @@ export class SensorsService {
    */
   async create(dto: CreateSensorDto): Promise<Sensor> {
     const normalized = dto.deviceId.trim().toLowerCase();
-
-    const [existing] = await this.relational
-      .select({ id: sensors.id })
-      .from(sensors)
-      .where(eq(sensors.deviceId, normalized))
-      .limit(1);
-
-    if (existing) {
-      throw new ConflictException(`Sensor with device ID ${normalized} is already registered`);
-    }
-
     const status = dto.status ?? 'active';
+
     const [created] = await this.relational
       .insert(sensors)
       .values({
@@ -88,7 +90,12 @@ export class SensorsService {
         installedAt: dto.installedAt ? new Date(dto.installedAt) : null,
         isSimulated: dto.isSimulated ?? false,
       })
+      .onConflictDoNothing({ target: sensors.deviceId })
       .returning();
+
+    if (!created) {
+      throw new ConflictException(`Sensor with device ID ${normalized} is already registered`);
+    }
 
     return this.toSensorResponse(created);
   }
@@ -150,12 +157,23 @@ export class SensorsService {
     const registeredRows = await this.relational
       .select({ deviceId: sensors.deviceId })
       .from(sensors);
-    const registeredSet = new Set(registeredRows.map((r) => r.deviceId.toLowerCase()));
+    const registeredIds = registeredRows.map((r) => r.deviceId.toLowerCase());
+
+    const excludeClause =
+      registeredIds.length > 0
+        ? sql`AND LOWER(sensor_id) NOT IN (${sql.join(
+            registeredIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})`
+        : sql``;
 
     const result = await this.telemetry.execute(sql`
-      SELECT sensor_id AS "deviceId", MAX(time) AS "lastSeen", COUNT(*)::int AS "readingCount"
-      FROM readings
-      WHERE time >= NOW() - INTERVAL '7 days'
+      SELECT
+        sensor_id AS "deviceId",
+        MAX(bucket) AS "lastSeen",
+        SUM(sample_count)::int AS "readingCount"
+      FROM readings_hourly
+      WHERE bucket >= NOW() - INTERVAL '7 days' ${excludeClause}
       GROUP BY sensor_id
       ORDER BY "lastSeen" DESC
       LIMIT 100
@@ -167,13 +185,11 @@ export class SensorsService {
       readingCount: number;
     }>;
 
-    return rows
-      .filter((r) => !registeredSet.has(String(r.deviceId).toLowerCase()))
-      .map((r) => ({
-        deviceId: String(r.deviceId),
-        lastSeen: new Date(r.lastSeen).toISOString(),
-        readingCount: Number(r.readingCount),
-      }));
+    return rows.map((r) => ({
+      deviceId: String(r.deviceId),
+      lastSeen: new Date(r.lastSeen).toISOString(),
+      readingCount: Number(r.readingCount),
+    }));
   }
 
   private toSensorResponse(r: typeof sensors.$inferSelect): Sensor {
@@ -185,7 +201,7 @@ export class SensorsService {
       latitude: r.latitude,
       longitude: r.longitude,
       neighborhood: r.neighborhood ?? undefined,
-      status: r.status as SensorStatus,
+      status: r.status,
       isActive: r.isActive,
       installedAt: r.installedAt ? r.installedAt.toISOString() : undefined,
       isSimulated: r.isSimulated,

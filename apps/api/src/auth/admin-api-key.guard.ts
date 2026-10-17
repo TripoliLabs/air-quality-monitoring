@@ -17,9 +17,10 @@ export class AdminApiKeyGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<HttpRequestWithHeaders>();
-    const configuredKey = this.config.get<string>('ADMIN_API_KEY');
+    const configuredKey = this.config.get<string>('ADMIN_API_KEY')?.trim();
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
 
-    if (!configuredKey) {
+    if (!configuredKey || (isProd && configuredKey === 'dev-admin-key')) {
       throw new UnauthorizedException('Admin API key is not configured on the server');
     }
 

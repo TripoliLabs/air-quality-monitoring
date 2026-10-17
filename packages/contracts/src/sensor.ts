@@ -52,8 +52,19 @@ export const NetworkOverviewSchema = z.object({
 export type NetworkOverview = z.infer<typeof NetworkOverviewSchema>;
 
 /** Allowed sensor operational statuses */
-export const SensorStatusSchema = z.enum(['active', 'maintenance', 'retired']);
+export const SENSOR_STATUSES = ['active', 'maintenance', 'retired'] as const;
+export const SensorStatusSchema = z.enum(SENSOR_STATUSES);
 export type SensorStatus = z.infer<typeof SensorStatusSchema>;
+
+/** Query parameters for listing sensors (GET /sensors) */
+export const ListSensorsQuerySchema = z.object({
+  status: SensorStatusSchema.optional(),
+  includeSimulated: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .transform((val) => val === true || val === 'true')
+    .default(true),
+});
+export type ListSensorsQuery = z.infer<typeof ListSensorsQuerySchema>;
 
 /** Payload for registering a new sensor in the registry */
 export const CreateSensorSchema = z.object({

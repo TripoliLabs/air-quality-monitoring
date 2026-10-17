@@ -2,7 +2,7 @@ import type { NetworkOverview, ReadingResponse } from '@aq/contracts';
 import { type RelationalDb, readings, sensors, type TelemetryDb } from '@aq/db';
 import { Controller, Get, Inject } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { gte, sql } from 'drizzle-orm';
+import { eq, gte, sql } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import { RELATIONAL_DB, TELEMETRY_DB } from '../database/database.module';
 import { NetworkOverviewDto } from '../dto';
@@ -24,7 +24,10 @@ export class OverviewController {
   @ApiOperation({ summary: 'Network-wide snapshot (online count, AQI, category breakdown)' })
   @ApiOkResponse({ type: NetworkOverviewDto })
   async overview(): Promise<NetworkOverview> {
-    const sensorRows = await this.relational.select({ deviceId: sensors.deviceId }).from(sensors);
+    const sensorRows = await this.relational
+      .select({ deviceId: sensors.deviceId })
+      .from(sensors)
+      .where(eq(sensors.isActive, true));
     const sensorsTotal = sensorRows.length;
 
     const latest = sensorsTotal
