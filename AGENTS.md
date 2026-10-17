@@ -8,7 +8,7 @@ Open-source distributed air quality monitoring network for Tripoli, Lebanon usin
 
 **Organization:** TripoliLabs
 **License:** AGPL-3.0 (keeps project open source forever, prevents closed-source SaaS exploitation)
-**Status:** Monorepo restructure complete. The dashboard is built (runs on mock data); api/ingestion and shared packages are fresh, compiling scaffolds wired together (codec → contracts → domain → db). Next: real schema/migrations, then feature work.
+**Status:** Monorepo restructure complete. The dashboard is built (live API in production builds; an in-browser mock for local dev only); api/ingestion and shared packages are fresh, compiling scaffolds wired together (codec → contracts → domain → db). Next: real schema/migrations, then feature work.
 
 > **Canonical architecture & decisions:** see [`docs/architecture.md`](docs/architecture.md)
 > for the monorepo layout and the adopted ADRs (two-DB topology, Drizzle, Zod
@@ -66,7 +66,7 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 **DB access:** Drizzle ORM (both DBs; `--custom` SQL migrations for Timescale DDL) (ADR-001)
 **API contracts:** Zod 4 (shared package) + nestjs-zod → auto OpenAPI (ADR-002)
 **Cache/PubSub:** Redis 8.x (caching + Pub/Sub for real-time WebSocket broadcast)
-**Frontend:** Vue.js 3.5+ + Vite 8+ + Tailwind CSS 4
+**Frontend:** Vue.js 3.5+ + Vite 8+ + Tailwind CSS 4 (own components and design tokens; no UI kit)
 **Maps:** MapLibre GL JS 6+ + OpenStreetMap tiles (open source, no API keys)
 **Charts:** Apache ECharts (better for real-time time-series data)
 **Observability:** OpenTelemetry → Grafana Alloy → **Grafana Cloud** (prod) · self-hosted LGTM stack local-only (dev)
@@ -211,8 +211,11 @@ On startup the **`simulator`** provisions ChirpStack (application, EU868/OTAA
 device-profile, gateway, the 6 fixture devices + root AppKeys) over its gRPC/REST
 API, performs a real **OTAA join** per device, then streams data. Root AppKeys
 are stored in a **Docker volume (`lorawan_keys`), never the repo**. The dashboard
-reads the backend through `apps/dashboard/src/services` (HTTP + WS), or falls
-back to the in-browser mock when `VITE_API_URL` is unset.
+reads the backend through `apps/dashboard/src/services` (HTTP + WS). A production
+build always uses the live API and does not bundle the mock. Locally the
+in-browser mock is the default, both for `pnpm dev` and for the compose
+dashboard; set `VITE_DATA_SOURCE=api` to show the live pipeline instead (see
+[`apps/dashboard/README.md`](apps/dashboard/README.md)).
 
 > ChirpStack config lives in `edge/chirpstack/` (`chirpstack.toml` +
 > `region_eu868.toml`). The gateway bridge + REST API are compose services.

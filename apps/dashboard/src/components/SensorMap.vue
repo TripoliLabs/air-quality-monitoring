@@ -1,392 +1,436 @@
 <script setup lang="ts">
-import { getAqiColor } from '@composables/useAqi';
-import { TRIPOLI_CENTER } from '@mock/sensors';
-import type { SensorTimeSeries } from '@stores/sensors';
-import * as maplibregl from 'maplibre-gl';
-// MapLibre 6 loads its worker from a separate module; give it a URL the bundler resolves.
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+/**
+ * The sensor map.
+ *
+ * Sensors are drawn as map layers fed from one GeoJSON source, so a live
+ * reading is a cheap `setData` and the map stays smooth with hundreds of
+ * sensors. Which measurement colours the dots comes from the metric registry;
+ * the basemap follows the theme, and its place labels follow the language.
+ */
+import {
+  type ExpressionSpecification,
+  type GeoJSONSource,
+  LngLatBounds,
+  Map as MapLibreMap,
+  Marker,
+  NavigationControl,
+  setWorkerUrl,
+} from 'maplibre-gl';
+// MapLibre 6 ships its worker as a separate module that imports a shared
+// chunk. `?worker&url` has Vite bundle the worker together with what it imports
+// and hand back the URL, so the map works in dev, in the build and on any host.
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useI18n } from 'vue-i18n';
-
-export type MapLayer = 'aqi' | 'pm25' | 'temperature' | 'humidity';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { useAqi } from '../composables/useAqi';
+import { useLocale } from '../composables/useLocale';
+import { useTheme } from '../composables/usePrefs';
+import { AQI_CATEGORIES, AQI_UNKNOWN } from '../lib/aqi';
+import { config } from '../lib/config';
+import { METRIC_ORDER, METRICS, type MetricId } from '../lib/metrics';
+import { TRIPOLI_CENTER } from '../lib/places';
+import type { SensorRow } from '../lib/stats';
+import type { Reading } from '../types';
+import AppIcon from './AppIcon.vue';
+import AqiChip from './AqiChip.vue';
+import SegmentedControl from './SegmentedControl.vue';
+import StatusLabel from './StatusLabel.vue';
 
 const props = withDefaults(
   defineProps<{
-    sensors: SensorTimeSeries[];
-    selectedSensorId?: string;
-    height?: string;
-    interactive?: boolean;
-    center?: { latitude: number; longitude: number };
-    zoom?: number;
+    rows: SensorRow[];
+    /** The reading that just arrived live; its sensor ripples once. */
+    pulse?: Reading | null;
+    /** Highlight one sensor and keep the view on it. */
+    focusId?: string;
+    /** Hide the layer switcher and the selection card (small location maps). */
+    compact?: boolean;
   }>(),
-  {
-    height: '500px',
-    interactive: true,
-    selectedSensorId: undefined,
-    center: undefined,
-    zoom: undefined,
-  },
+  { pulse: null, focusId: undefined, compact: false },
 );
 
-const emit = defineEmits<{
-  sensorClick: [sensorId: string];
-}>();
+const { t, locale, n, metricValue, metricUnit, sensorName, sensorPlace } = useLocale();
+const { theme, isDark } = useTheme();
+const aqi = useAqi();
 
-const { t, locale } = useI18n();
-const mapContainer = ref<HTMLDivElement | null>(null);
-const activeLayer = ref<MapLayer>('aqi');
-maplibregl.setWorkerUrl(maplibreWorkerUrl);
+setWorkerUrl(workerUrl);
 
-let map: maplibregl.Map | null = null;
-const markers: Map<string, maplibregl.Marker> = new Map();
+const SOURCE = 'sensors';
+const container = ref<HTMLDivElement | null>(null);
+const map = shallowRef<MapLibreMap | null>(null);
+const failed = ref(false);
+const metric = ref<MetricId>('aqi');
+const selectedId = ref<string | null>(null);
+let fitted = false;
+let styleReady = false;
 
-// ── Layer color functions ──
+const metricOptions = computed(() =>
+  METRIC_ORDER.map((id) => ({ value: id, label: t(`metrics.${id}.short`) })),
+);
+const selected = computed(
+  () => props.rows.find((row) => row.sensor.id === selectedId.value) ?? null,
+);
 
-function interpolateColor(
-  value: number,
-  min: number,
-  max: number,
-  stops: { pos: number; color: [number, number, number] }[],
-): string {
-  const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
-  let lower = stops[0];
-  let upper = stops[stops.length - 1];
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (t >= stops[i].pos && t <= stops[i + 1].pos) {
-      lower = stops[i];
-      upper = stops[i + 1];
-      break;
-    }
-  }
-  const range = upper.pos - lower.pos || 1;
-  const f = (t - lower.pos) / range;
-  const r = Math.round(lower.color[0] + (upper.color[0] - lower.color[0]) * f);
-  const g = Math.round(lower.color[1] + (upper.color[1] - lower.color[1]) * f);
-  const b = Math.round(lower.color[2] + (upper.color[2] - lower.color[2]) * f);
-  return `rgb(${r},${g},${b})`;
+/** Dark text on light fills, light text on dark fills. */
+function readableOn(hex: string): string {
+  const v = Number.parseInt(hex.slice(1), 16);
+  const luminance =
+    (0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255;
+  return luminance > 0.55 ? '#0C2231' : '#FFFFFF';
 }
 
-function getPm25Color(pm25: number): string {
-  return interpolateColor(pm25, 0, 150, [
-    { pos: 0, color: [0, 228, 0] },
-    { pos: 0.08, color: [0, 228, 0] },
-    { pos: 0.24, color: [255, 255, 0] },
-    { pos: 0.37, color: [255, 126, 0] },
-    { pos: 0.7, color: [255, 0, 0] },
-    { pos: 1, color: [143, 63, 151] },
-  ]);
-}
+type SensorFeatures = Parameters<GeoJSONSource['setData']>[0];
 
-function getTempColor(temp: number): string {
-  return interpolateColor(temp, 10, 40, [
-    { pos: 0, color: [59, 130, 246] },
-    { pos: 0.35, color: [34, 197, 94] },
-    { pos: 0.65, color: [234, 179, 8] },
-    { pos: 1, color: [239, 68, 68] },
-  ]);
-}
-
-function getHumidityColor(humidity: number): string {
-  return interpolateColor(humidity, 20, 90, [
-    { pos: 0, color: [194, 120, 62] },
-    { pos: 0.5, color: [34, 197, 94] },
-    { pos: 1, color: [59, 130, 246] },
-  ]);
-}
-
-function getColorForSensor(sensor: SensorTimeSeries): string {
-  if (!sensor.latest) return '#6b7280';
-  switch (activeLayer.value) {
-    case 'pm25':
-      return getPm25Color(sensor.latest.pm2_5);
-    case 'temperature':
-      return getTempColor(sensor.latest.temperature);
-    case 'humidity':
-      return getHumidityColor(sensor.latest.humidity);
-    default:
-      return getAqiColor(sensor.latest.aqi);
-  }
-}
-
-function getMetricLabel(sensor: SensorTimeSeries): string {
-  if (!sensor.latest) return '--';
-  switch (activeLayer.value) {
-    case 'pm25':
-      return `${sensor.latest.pm2_5.toFixed(1)} µg/m³`;
-    case 'temperature':
-      return `${sensor.latest.temperature.toFixed(1)}°C`;
-    case 'humidity':
-      return `${sensor.latest.humidity.toFixed(0)}%`;
-    default:
-      return `AQI ${sensor.latest.aqi}`;
-  }
-}
-
-// ── Legend config ──
-
-interface LegendConfig {
-  gradient: string;
-  min: string;
-  max: string;
-}
-
-const legendConfig = computed((): LegendConfig => {
-  switch (activeLayer.value) {
-    case 'pm25':
+const features = computed((): SensorFeatures => {
+  const def = METRICS[metric.value];
+  return {
+    type: 'FeatureCollection' as const,
+    features: props.rows.map((row) => {
+      const live = row.status === 'online' && row.reading;
+      const value = live ? def.value(row.reading as Reading) : undefined;
+      const color = value === undefined ? AQI_UNKNOWN.solid : def.color(value);
       return {
-        gradient: 'linear-gradient(to right, #00e400, #ffff00, #ff7e00, #ff0000, #8f3f97)',
-        min: '0',
-        max: '150 µg/m³',
+        type: 'Feature' as const,
+        id: row.sensor.id,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [row.sensor.longitude, row.sensor.latitude],
+        },
+        properties: {
+          id: row.sensor.id,
+          live: Boolean(live),
+          color,
+          ink: readableOn(color),
+          label: value === undefined ? '' : n(value, 0),
+          // Worst air drawn last, so it is never hidden under a cleaner neighbour.
+          rank: value ?? -1,
+          focus: row.sensor.id === (props.focusId ?? selectedId.value),
+        },
       };
-    case 'temperature':
-      return {
-        gradient: 'linear-gradient(to right, #3b82f6, #22c55e, #eab308, #ef4444)',
-        min: '10°C',
-        max: '40°C',
-      };
-    case 'humidity':
-      return {
-        gradient: 'linear-gradient(to right, #c2783e, #22c55e, #3b82f6)',
-        min: '20%',
-        max: '90%',
-      };
-    default:
-      return {
-        gradient: 'linear-gradient(to right, #00e400, #ffff00, #ff7e00, #ff0000, #8f3f97, #7e0023)',
-        min: '0',
-        max: '300+',
-      };
-  }
+    }),
+  };
 });
 
-const layers: { key: MapLayer; labelKey: string }[] = [
-  { key: 'aqi', labelKey: 'map.layerAqi' },
-  { key: 'pm25', labelKey: 'map.layerPm25' },
-  { key: 'temperature', labelKey: 'map.layerTemp' },
-  { key: 'humidity', labelKey: 'map.layerHumidity' },
-];
-
-// ── Marker creation & updates ──
-
-function createMarkerElement(color: string): HTMLDivElement {
-  const outer = document.createElement('div');
-  outer.style.cssText = 'width: 22px; height: 22px; cursor: pointer;';
-
-  const dot = document.createElement('div');
-  dot.className = 'sensor-dot';
-  dot.style.cssText = `
-    width: 14px;
-    height: 14px;
-    margin: 4px;
-    border-radius: 50%;
-    background: ${color};
-    border: 2px solid rgba(255,255,255,0.6);
-    box-shadow: 0 0 6px ${color}80, 0 0 12px ${color}30;
-    transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
-  `;
-
-  outer.addEventListener('mouseenter', () => {
-    dot.style.transform = 'scale(1.5)';
-    dot.style.boxShadow = `0 0 10px ${dot.style.background}aa, 0 0 20px ${dot.style.background}50`;
-  });
-  outer.addEventListener('mouseleave', () => {
-    dot.style.transform = 'scale(1)';
-    const bg = dot.style.background;
-    dot.style.boxShadow = `0 0 6px ${bg}80, 0 0 12px ${bg}30`;
-  });
-
-  outer.appendChild(dot);
-  return outer;
-}
-
-// Escape server-supplied strings before they go into popup.setHTML (XSS sink).
-function escapeHtml(s: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  };
-  return s.replace(/[&<>"']/g, (c) => map[c] ?? c);
-}
-
-function getSensorName(sensor: SensorTimeSeries): string {
-  return locale.value === 'ar' ? sensor.definition.nameAr : sensor.definition.name;
-}
-
-function getNeighborhood(sensor: SensorTimeSeries): string {
-  return locale.value === 'ar'
-    ? sensor.definition.location.neighborhoodAr
-    : sensor.definition.location.neighborhood;
-}
-
-function updateDotColor(dot: HTMLDivElement, color: string): void {
-  dot.style.background = color;
-  dot.style.boxShadow = `0 0 6px ${color}80, 0 0 12px ${color}30`;
-}
-
-function updateMarkers(): void {
-  if (!map) return;
-
-  for (const sensor of props.sensors) {
-    const { latitude, longitude } = sensor.definition.location;
-    const color = getColorForSensor(sensor);
-    const existing = markers.get(sensor.definition.id);
-
-    if (existing) {
-      const dot = existing.getElement().querySelector('.sensor-dot') as HTMLDivElement | null;
-      if (dot) updateDotColor(dot, color);
-    } else {
-      const el = createMarkerElement(color);
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([longitude, latitude])
-        .addTo(map);
-
-      el.addEventListener('click', () => {
-        emit('sensorClick', sensor.definition.id);
-      });
-
-      const popup = new maplibregl.Popup({
-        offset: 14,
-        closeButton: false,
-        closeOnClick: false,
-      });
-
-      el.addEventListener('mouseenter', () => {
-        const name = getSensorName(sensor);
-        const neighborhood = getNeighborhood(sensor);
-        const metric = getMetricLabel(sensor);
-        popup
-          .setLngLat([longitude, latitude])
-          .setHTML(
-            `<div style="font-size:13px">
-              <strong>${escapeHtml(name)}</strong>
-              <span style="color:#9ca3af;font-size:11px"> ${escapeHtml(neighborhood)}</span><br/>
-              <span><b>${escapeHtml(metric)}</b></span>
-            </div>`,
-          )
-          .addTo(map!);
-      });
-
-      el.addEventListener('mouseleave', () => {
-        popup.remove();
-      });
-
-      markers.set(sensor.definition.id, marker);
-    }
+/** Basemap labels in the reader's script; the style ships both. */
+function localiseLabels(m: MapLibreMap): void {
+  const name: ExpressionSpecification =
+    locale.value === 'ar'
+      ? ['coalesce', ['get', 'name:ar'], ['get', 'name:nonlatin'], ['get', 'name']]
+      : [
+          'coalesce',
+          ['get', 'name:en'],
+          ['get', 'name_en'],
+          ['get', 'name:latin'],
+          ['get', 'name'],
+        ];
+  for (const layer of m.getStyle().layers ?? []) {
+    if (layer.type !== 'symbol' || layer.source === SOURCE) continue;
+    const field = JSON.stringify(layer.layout?.['text-field'] ?? '');
+    if (field.includes('name')) m.setLayoutProperty(layer.id, 'text-field', name);
   }
 }
 
-// ── Lifecycle ──
+function addSensorLayers(m: MapLibreMap): void {
+  const halo = isDark.value ? '#07161F' : '#FFFFFF';
+  m.addSource(SOURCE, { type: 'geojson', data: features.value, promoteId: 'id' });
+
+  m.addLayer({
+    id: 'sensor-focus',
+    type: 'circle',
+    source: SOURCE,
+    filter: ['==', ['get', 'focus'], true],
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 13, 15, 24],
+      'circle-color': 'transparent',
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': isDark.value ? '#E9F2F7' : '#0C2231',
+    },
+  });
+  m.addLayer({
+    id: 'sensor-dots',
+    type: 'circle',
+    source: SOURCE,
+    layout: { 'circle-sort-key': ['get', 'rank'] },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 12.5, 9, 15, 16],
+      // Sensors that are not reporting are a faint grey ring, not a coloured dot.
+      'circle-color': ['case', ['get', 'live'], ['get', 'color'], AQI_UNKNOWN.solid],
+      'circle-opacity': ['case', ['get', 'live'], 1, 0.3],
+      'circle-stroke-width': ['case', ['get', 'live'], 2, 2.5],
+      'circle-stroke-color': ['case', ['get', 'live'], halo, AQI_UNKNOWN.solid],
+    },
+  });
+  m.addLayer({
+    id: 'sensor-values',
+    type: 'symbol',
+    source: SOURCE,
+    minzoom: 12.2,
+    filter: ['==', ['get', 'live'], true],
+    layout: {
+      'text-field': ['get', 'label'],
+      'text-font': ['Noto Sans Bold'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 12.2, 9, 15, 13],
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+      'symbol-sort-key': ['get', 'rank'],
+    },
+    paint: { 'text-color': ['get', 'ink'] },
+  });
+}
+
+function onStyleReady(m: MapLibreMap): void {
+  styleReady = true;
+  localiseLabels(m);
+  if (!m.getSource(SOURCE)) addSensorLayers(m);
+  fitToSensors(m);
+}
+
+function fitToSensors(m: MapLibreMap): void {
+  if (props.focusId) {
+    const row = props.rows.find((r) => r.sensor.id === props.focusId);
+    if (row) m.jumpTo({ center: [row.sensor.longitude, row.sensor.latitude], zoom: 14.5 });
+    return;
+  }
+  if (fitted || props.rows.length === 0) return;
+  fitted = true;
+  const bounds = new LngLatBounds();
+  for (const row of props.rows) bounds.extend([row.sensor.longitude, row.sensor.latitude]);
+  // Extra room at the top and bottom for the layer switcher and the legend.
+  m.fitBounds(bounds, {
+    padding: props.compact ? 48 : { top: 84, bottom: 84, left: 48, right: 56 },
+    maxZoom: 14.5,
+    duration: 0,
+  });
+}
+
+function ripple(reading: Reading): void {
+  const m = map.value;
+  const row = props.rows.find((r) => r.sensor.id === reading.sensorId);
+  if (!m || !row || document.visibilityState !== 'visible') return;
+  // MapLibre positions the marker element with a transform, so the animated
+  // ring has to be a child of it.
+  const el = document.createElement('div');
+  const ring = document.createElement('div');
+  ring.className = 'sensor-ripple';
+  ring.style.borderColor = METRICS[metric.value].color(
+    METRICS[metric.value].value(reading) ?? reading.aqi,
+  );
+  el.appendChild(ring);
+  const marker = new Marker({ element: el })
+    .setLngLat([row.sensor.longitude, row.sensor.latitude])
+    .addTo(m);
+  setTimeout(() => marker.remove(), 1500);
+}
 
 onMounted(() => {
-  if (!mapContainer.value) return;
-
-  const mapCenter = props.center ?? TRIPOLI_CENTER;
-  const mapZoom = props.zoom ?? TRIPOLI_CENTER.zoom;
-
-  map = new maplibregl.Map({
-    container: mapContainer.value,
-    style: 'https://tiles.openfreemap.org/styles/dark',
-    center: [mapCenter.longitude, mapCenter.latitude],
-    zoom: mapZoom,
-    interactive: props.interactive,
-    attributionControl: false,
-  });
-
-  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-
-  if (props.interactive) {
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  if (!container.value) return;
+  let m: MapLibreMap;
+  try {
+    m = new MapLibreMap({
+      container: container.value,
+      style: config.mapStyle[theme.value],
+      center: [TRIPOLI_CENTER.longitude, TRIPOLI_CENTER.latitude],
+      zoom: TRIPOLI_CENTER.zoom,
+      minZoom: 9,
+      maxZoom: 17,
+      attributionControl: { compact: true },
+      // On a phone, one finger scrolls the page and two move the map.
+      cooperativeGestures: true,
+      interactive: !props.compact,
+    });
+  } catch {
+    failed.value = true; // no WebGL
+    return;
   }
+  map.value = m;
 
-  map.on('load', () => {
-    updateMarkers();
+  if (!props.compact) {
+    m.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
+  }
+  m.on('style.load', () => onStyleReady(m));
+  // The attribution opens expanded; fold it to its "i" button so it does not
+  // sit on top of the legend on a narrow screen. One tap opens it again.
+  m.once('load', () => {
+    container.value
+      ?.querySelector('.maplibregl-ctrl-attrib')
+      ?.classList.remove('maplibregl-compact-show');
   });
+  m.on('error', (event) => {
+    // A failed basemap leaves an empty canvas; say so instead.
+    if (!styleReady && /style|fetch|network/i.test(String(event.error?.message)))
+      failed.value = true;
+  });
+
+  if (!props.compact) {
+    m.on('click', 'sensor-dots', (event) => {
+      selectedId.value = String(event.features?.[0]?.properties?.id ?? '') || null;
+    });
+    m.on('click', (event) => {
+      const hit = m.queryRenderedFeatures(event.point, { layers: ['sensor-dots'] });
+      if (hit.length === 0) selectedId.value = null;
+    });
+    m.on('mouseenter', 'sensor-dots', () => (m.getCanvas().style.cursor = 'pointer'));
+    m.on('mouseleave', 'sensor-dots', () => (m.getCanvas().style.cursor = ''));
+  }
+});
+
+watch(features, (data) => {
+  const m = map.value;
+  if (!m || !styleReady) return;
+  (m.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(data);
+  fitToSensors(m);
+});
+
+watch(theme, (value) => {
+  styleReady = false;
+  map.value?.setStyle(config.mapStyle[value]);
+});
+
+watch(locale, () => {
+  if (map.value && styleReady) localiseLabels(map.value);
 });
 
 watch(
-  () =>
-    props.sensors.map((s) => [
-      s.latest?.aqi,
-      s.latest?.pm2_5,
-      s.latest?.temperature,
-      s.latest?.humidity,
-    ]),
-  () => updateMarkers(),
-  { deep: true },
-);
-
-watch(activeLayer, () => updateMarkers());
-
-watch(
-  () => props.selectedSensorId,
-  (id) => {
-    if (!map || !id) return;
-    const sensor = props.sensors.find((s) => s.definition.id === id);
-    if (sensor) {
-      map.flyTo({
-        center: [sensor.definition.location.longitude, sensor.definition.location.latitude],
-        zoom: 15,
-        duration: 1000,
-      });
-    }
+  () => props.pulse,
+  (reading) => {
+    if (reading) ripple(reading);
   },
 );
 
-onBeforeUnmount(() => {
-  markers.forEach((m) => m.remove());
-  markers.clear();
-  map?.remove();
-  map = null;
+watch(
+  () => props.focusId,
+  () => {
+    if (map.value && styleReady) fitToSensors(map.value);
+  },
+);
+
+onBeforeUnmount(() => map.value?.remove());
+
+const legend = computed(() => {
+  const def = METRICS[metric.value];
+  if (metric.value === 'aqi') return null;
+  const [min, max] = def.range;
+  const stops = Array.from({ length: 9 }, (_, i) => def.color(min + ((max - min) * i) / 8));
+  return { min, max, gradient: `linear-gradient(90deg, ${stops.join(', ')})` };
 });
 </script>
 
 <template>
-  <div class="relative overflow-hidden rounded-xl border border-gray-800" :style="{ height }">
-    <!-- Map canvas -->
-    <div ref="mapContainer" class="h-full w-full"></div>
+  <div class="relative isolate overflow-hidden rounded-panel border bg-sunken">
+    <div ref="container" class="h-full w-full" role="application" :aria-label="t('map.label')" />
 
-    <!-- Layer toggle (top-left) -->
-    <div
-      v-if="interactive"
-      class="absolute start-3 top-3 z-10 flex rounded-lg border border-gray-700 bg-gray-900/90 backdrop-blur-xs"
+    <p
+      v-if="failed"
+      class="absolute inset-0 z-10 flex items-center justify-center bg-sunken p-6 text-center text-sm text-ink-2"
     >
-      <button
-        v-for="layer in layers"
-        :key="layer.key"
-        class="px-2.5 py-1.5 text-xs font-medium transition-colors"
-        :class="
-          activeLayer === layer.key
-            ? 'bg-emerald-600 text-white'
-            : 'text-gray-400 hover:text-gray-200'
-        "
-        :style="{
-          borderRadius:
-            layer.key === layers[0].key
-              ? '0.45rem 0 0 0.45rem'
-              : layer.key === layers[layers.length - 1].key
-                ? '0 0.45rem 0.45rem 0'
-                : '0',
-        }"
-        @click="activeLayer = layer.key"
-      >
-        {{ t(layer.labelKey) }}
-      </button>
-    </div>
+      {{ t('map.unavailable') }}
+    </p>
 
-    <!-- Legend (bottom-left) -->
-    <div
-      v-if="interactive"
-      class="absolute start-3 bottom-3 z-10 rounded-lg border border-gray-700 bg-gray-900/90 px-3 py-2 backdrop-blur-xs"
-    >
-      <div class="h-2.5 w-36 rounded-full" :style="{ background: legendConfig.gradient }"></div>
-      <div class="mt-1 flex justify-between text-[10px] text-gray-400">
-        <span>{{ legendConfig.min }}</span>
-        <span>{{ legendConfig.max }}</span>
+    <template v-if="!compact && !failed">
+      <!-- What the dots show -->
+      <div class="absolute inset-x-3 top-3 z-10 flex">
+        <SegmentedControl
+          v-model="metric"
+          :options="metricOptions"
+          :label="t('map.show')"
+          class="shadow-[0_6px_20px_-8px_rgb(7_22_31/0.4)]"
+        />
       </div>
-    </div>
+
+      <!-- Legend. Pinned to the physical left in both directions: the map's own
+           zoom buttons are always bottom right. -->
+      <div
+        class="absolute bottom-3 left-3 z-10 max-w-[calc(100%-5rem)] rounded-control border bg-surface/92 px-3 py-2 text-xs backdrop-blur-sm"
+        :class="{ 'max-sm:hidden': selected }"
+      >
+        <div v-if="!legend" class="flex items-center gap-2" dir="ltr">
+          <span
+            v-for="category in AQI_CATEGORIES"
+            :key="category.id"
+            class="num flex size-5 items-center justify-center rounded-full text-[0.625rem] font-semibold"
+            :style="{ backgroundColor: category.solid, color: category.onSolid }"
+            :title="`${t(`aqi.names.${category.id}`)} (${category.min}–${category.max})`"
+          >
+            {{ category.level }}
+          </span>
+        </div>
+        <div v-else class="flex items-center gap-2" dir="ltr">
+          <span class="num text-ink-2">{{ n(legend.min) }}</span>
+          <span class="h-2 w-24 rounded-full sm:w-32" :style="{ background: legend.gradient }" />
+          <span class="num text-ink-2">{{ n(legend.max) }} {{ metricUnit(metric) }}</span>
+        </div>
+        <div class="mt-1.5 flex items-center gap-1.5 text-ink-2">
+          <span class="inline-block size-3 rounded-full border-2 border-ink-3 bg-surface" />
+          {{ t('map.notReporting') }}
+        </div>
+      </div>
+
+      <!-- The selected sensor -->
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="translate-y-3 opacity-0"
+        leave-active-class="transition duration-150 ease-in"
+        leave-to-class="translate-y-3 opacity-0"
+      >
+        <div
+          v-if="selected"
+          class="absolute inset-x-3 bottom-3 z-20 rounded-panel border bg-raised p-4 shadow-[0_16px_40px_-16px_rgb(7_22_31/0.5)] sm:right-14 sm:left-auto sm:w-80"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="truncate font-medium">{{ sensorName(selected.sensor) }}</p>
+              <p class="truncate text-sm text-ink-2">{{ sensorPlace(selected.sensor) }}</p>
+            </div>
+            <button
+              type="button"
+              class="-m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full text-ink-2 hover:bg-sunken"
+              :aria-label="t('states.close')"
+              @click="selectedId = null"
+            >
+              <AppIcon name="close" />
+            </button>
+          </div>
+
+          <div v-if="selected.reading" class="mt-3 flex items-center gap-3">
+            <AqiChip :aqi="selected.reading.aqi" :stale="selected.status !== 'online'" size="lg" />
+            <div class="min-w-0 text-sm">
+              <p
+                v-if="selected.status === 'online'"
+                class="font-medium"
+                :style="{ color: aqi.text(selected.reading.aqi) }"
+              >
+                {{ aqi.name(selected.reading.aqi) }}
+              </p>
+              <StatusLabel v-else :status="selected.status" />
+              <p class="text-ink-2">
+                {{ t('metrics.pm25.short') }}
+                <span class="num">{{ metricValue('pm25', selected.reading.pm25) }}</span>
+                {{ metricUnit('pm25') }}
+              </p>
+            </div>
+          </div>
+          <StatusLabel v-else class="mt-3" :status="selected.status" />
+
+          <RouterLink
+            :to="{ name: 'sensor', params: { id: selected.sensor.id } }"
+            class="btn btn-primary mt-4 w-full"
+          >
+            {{ t('map.open') }}
+            <AppIcon name="chevron" directional />
+          </RouterLink>
+        </div>
+      </Transition>
+    </template>
   </div>
 </template>
+
+<style>
+.sensor-ripple {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  border: 2px solid;
+  pointer-events: none;
+  animation: pulse-ring 1.4s var(--ease-out-soft) forwards;
+}
+</style>

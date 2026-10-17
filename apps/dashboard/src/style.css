@@ -1,133 +1,324 @@
-/* PrimeIcons */
-@import 'primeicons/primeicons.css';
+/* One variable typeface for both scripts: Readex Pro covers Latin and Arabic in
+   a single family, so English and Arabic share weight, rhythm and x-height.
+   Self-hosted — no third-party font request, and it works on a slow link. */
+@import '@fontsource-variable/readex-pro/wght.css';
 
 /* Tailwind CSS 4 — configured in CSS (no tailwind.config.js / PostCSS plugin). */
 @import 'tailwindcss';
 
-/* Dark mode is toggled with a `.dark` class (same selector PrimeVue uses). */
-@custom-variant dark (&:where(.dark, .dark *));
+/* Dark mode follows the `data-theme` attribute set on <html> (see usePrefs). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-@theme {
-  --color-aqi-good: #00e400;
-  --color-aqi-moderate: #ffff00;
-  --color-aqi-unhealthy-sensitive: #ff7e00;
-  --color-aqi-unhealthy: #ff0000;
-  --color-aqi-very-unhealthy: #8f3f97;
-  --color-aqi-hazardous: #7e0023;
+/* -----------------------------------------------------------------------------
+   Design tokens. Two themes, one set of names. Components only ever use the
+   names (bg-surface, text-ink-2, border-line …), never raw colours, so a theme
+   is changed here and nowhere else. AQI colours live in src/lib/aqi.ts because
+   charts and the map need them as values, not CSS.
+
+   Light is coastal daylight: a pale sea-haze page, white surfaces, deep-sea ink.
+   Dark is the port at night: navy, not black.
+   -------------------------------------------------------------------------- */
+:root {
+  --bg: #eef4f8;
+  --surface: #ffffff;
+  --sunken: #e3ecf2;
+  --raised: #ffffff;
+  --ink: #0c2231;
+  --ink-2: #3d5566;
+  --ink-3: #526b7a;
+  --line: #d3dee6;
+  --brand: #0a6788;
+  --on-brand: #ffffff;
+  --danger: #b8251f;
+  /* The sky panel: a clear-day wash that the breeze drifts across. */
+  --sky-top: #d9e9f3;
+  --sky-bottom: #f4f8fb;
+  --streak: 12 34 49;
+  color-scheme: light;
 }
 
-/* Tailwind 4 changed the default border colour to currentColor; keep the
-   Tailwind 3 default so existing borders look the same. */
+[data-theme='dark'] {
+  --bg: #07161f;
+  --surface: #0e2330;
+  --sunken: #0a1c27;
+  --raised: #15303f;
+  --ink: #e9f2f7;
+  --ink-2: #b0c4d0;
+  --ink-3: #8ca5b3;
+  --line: #1f3b4a;
+  --brand: #63c7e3;
+  --on-brand: #062532;
+  --danger: #ff8076;
+  --sky-top: #0b2433;
+  --sky-bottom: #0a1c27;
+  --streak: 233 242 247;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
+  --color-danger: var(--danger);
+
+  --font-sans:
+    'Readex Pro Variable', 'Readex Pro', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  /* Type scale (rem). Display sizes are fluid so a 360 px phone and a desktop
+     both get a headline that fills the hero without wrapping awkwardly. */
+  --text-display: clamp(2.75rem, 1.6rem + 5.4vw, 5.5rem);
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.035em;
+  --text-title: clamp(1.75rem, 1.35rem + 1.6vw, 2.5rem);
+  --text-title--line-height: 1.12;
+  --text-title--letter-spacing: -0.02em;
+
+  /* Radii carry hierarchy: the sky panel is the roundest thing on a page,
+     panels less so, controls least. */
+  --radius-sky: 1.75rem;
+  --radius-panel: 1.125rem;
+  --radius-control: 0.625rem;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @layer base {
   *,
   ::after,
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
-  }
-}
-
-/* Base resets for full viewport */
-@layer base {
-  html,
-  body,
-  #app {
-    @apply m-0 h-full w-full p-0;
+    border-color: var(--line);
   }
 
   html {
-    @apply antialiased;
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-gray-950 text-gray-100;
-    font-family:
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      Roboto,
-      sans-serif;
+    @apply bg-bg font-sans text-ink antialiased;
+    min-height: 100dvh;
+    font-weight: 380;
+    font-feature-settings: 'tnum' 0;
+    line-height: 1.55;
+  }
+
+  /* Arabic sets a little larger and looser: its counters are smaller at the
+     same point size, and joined letters need the air. Letter-spacing breaks
+     the joins, so it is always off. */
+  :lang(ar) {
+    letter-spacing: 0 !important;
+  }
+  :lang(ar) body {
+    line-height: 1.75;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 560;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a,
+  button,
+  [role='button'],
+  input,
+  select,
+  summary {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--brand) 28%, transparent);
   }
 }
 
-/* Custom styles */
-:root {
-  --color-good: #00e400;
-  --color-moderate: #ffff00;
-  --color-unhealthy-sensitive: #ff7e00;
-  --color-unhealthy: #ff0000;
-  --color-very-unhealthy: #8f3f97;
-  --color-hazardous: #7e0023;
+@layer components {
+  /* Figures that change live keep their width so the layout never jitters. */
+  .num {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: 'tnum' 1;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  .panel {
+    @apply rounded-panel border bg-surface;
+  }
+
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-4 text-sm font-medium transition-colors;
+  }
+  .btn-primary {
+    @apply bg-brand text-on-brand;
+  }
+  .btn-primary:hover {
+    background: color-mix(in srgb, var(--brand) 88%, var(--ink));
+  }
+  .btn-quiet {
+    @apply border bg-transparent text-ink;
+  }
+  .btn-quiet:hover {
+    @apply bg-sunken;
+  }
+
+  .link {
+    @apply text-brand underline decoration-1 underline-offset-4;
+  }
+  .link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  /* Skeleton shimmer for loading states. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-control bg-sunken;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--surface) 70%, transparent),
+      transparent
+    );
+    transform: translateX(-100%);
+    animation: shimmer 1.6s infinite;
+  }
+  [dir='rtl'] .skeleton::after {
+    animation-direction: reverse;
+  }
 }
 
-/* RTL support for Arabic */
-[dir='rtl'] {
-  text-align: right;
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 
-/* MapLibre GL JS container */
+/* A value that just changed breathes once, so the eye catches live updates
+   without anything flashing. */
+@keyframes settle {
+  from {
+    opacity: 0.35;
+    transform: translateY(0.18em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.settle {
+  animation: settle 0.5s var(--ease-out-soft);
+}
+
+@keyframes pulse-ring {
+  from {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- MapLibre ------------------------------------------------------------- */
 .maplibregl-map {
   font-family: inherit;
 }
-
-/* MapLibre dark mode popup styles */
 .maplibregl-popup-content {
-  background: #1f2937 !important;
-  color: #f3f4f6 !important;
-  border-radius: 0.5rem !important;
-  padding: 0.75rem 1rem !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
-  border: 1px solid #374151 !important;
+  background: var(--raised) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 0.875rem !important;
+  padding: 0.75rem 0.875rem !important;
+  box-shadow: 0 12px 32px -12px rgb(7 22 31 / 0.35) !important;
 }
-
 .maplibregl-popup-tip {
-  border-top-color: #1f2937 !important;
+  display: none !important;
+}
+.maplibregl-ctrl-group {
+  background: var(--raised) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: none !important;
+  border-radius: 0.625rem !important;
+  overflow: hidden;
+}
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--line) !important;
+}
+[data-theme='dark'] .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1) hue-rotate(180deg);
+}
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--surface) 80%, transparent) !important;
+  color: var(--ink-3) !important;
+  font-size: 0.6875rem !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--ink-2) !important;
 }
 
-.maplibregl-popup-close-button {
-  color: #9ca3af !important;
-  font-size: 1.25rem !important;
-  padding: 0.25rem 0.5rem !important;
+/* The page column: full width on phones, capped and centred on large screens. */
+@utility shell {
+  width: 100%;
+  max-width: 88rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  @variant sm {
+    padding-inline: 1.5rem;
+  }
+  @variant lg {
+    padding-inline: 2.5rem;
+  }
+  /* Large desktop monitors and wall displays: use the room. */
+  @media (min-width: 112rem) {
+    max-width: 108rem;
+  }
 }
 
-.maplibregl-popup-close-button:hover {
-  color: #f3f4f6 !important;
-  background: transparent !important;
-}
-
-/* AQI color classes */
-.aqi-good {
-  background-color: var(--color-good);
-}
-
-.aqi-moderate {
-  background-color: var(--color-moderate);
-}
-
-.aqi-unhealthy-sensitive {
-  background-color: var(--color-unhealthy-sensitive);
-}
-
-.aqi-unhealthy {
-  background-color: var(--color-unhealthy);
-  color: white;
-}
-
-.aqi-very-unhealthy {
-  background-color: var(--color-very-unhealthy);
-  color: white;
-}
-
-.aqi-hazardous {
-  background-color: var(--color-hazardous);
-  color: white;
-}
-
-/* Gradient accent divider for header/footer */
-.gradient-accent {
-  height: 1px;
-  background: linear-gradient(to right, transparent, #10b981aa, #0ea5e9aa, #10b981aa, transparent);
+/* On very wide screens everything scales up together (all sizes are in rem),
+   so a dashboard on a wall display is readable from across the room. */
+@media (min-width: 140rem) {
+  html {
+    font-size: 112.5%;
+  }
 }

@@ -361,6 +361,11 @@ services:
     ports:
       - "5173:5173"
     environment:
+      # Local default is the in-browser mock, so the dashboard looks populated
+      # from the first second. For the live pipeline below instead, run
+      #   VITE_DATA_SOURCE=api docker compose up -d dashboard
+      # (A production image has no mock: it calls the API on its own origin.)
+      VITE_DATA_SOURCE: ${VITE_DATA_SOURCE:-mock}
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
       VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000}
       CHOKIDAR_USEPOLLING: "true"

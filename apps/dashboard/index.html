@@ -1,24 +1,44 @@
 <!doctype html>
-<html lang="en" class="dark h-full">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#eef4f8" />
     <meta
       name="description"
-      content="Project Qalawun - Real-time air quality monitoring for Tripoli, Lebanon"
+      content="Live air quality in Tripoli, Lebanon, from an open network of solar-powered sensors. جودة الهواء في طرابلس مباشرةً."
     />
-    <title>Project Qalawun - Air Quality Monitor</title>
-    <!-- Arabic font support -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Qalawun — Tripoli air quality</title>
+    <script>
+      // Apply the saved (or system) language and theme before first paint, so the
+      // page never flashes in the wrong direction or the wrong colours.
+      // Kept in step with src/composables/usePrefs.ts.
+      (function () {
+        var root = document.documentElement;
+        var get = function (key) {
+          try {
+            return localStorage.getItem(key);
+          } catch (e) {
+            return null;
+          }
+        };
+        var locale = get('aq.locale');
+        if (locale !== 'en' && locale !== 'ar') {
+          locale = (navigator.language || '').toLowerCase().indexOf('ar') === 0 ? 'ar' : 'en';
+        }
+        root.lang = locale;
+        root.dir = locale === 'ar' ? 'rtl' : 'ltr';
+        var theme = get('aq.theme');
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        root.dataset.theme = theme;
+      })();
+    </script>
   </head>
-  <body class="m-0 h-full overflow-x-hidden p-0">
-    <div id="app" class="h-full"></div>
+  <body>
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
