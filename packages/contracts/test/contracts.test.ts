@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ChirpStackUplinkSchema, ReadingCreatedEventSchema, SensorReadingSchema } from '../src/index';
+import {
+  ChirpStackUplinkSchema,
+  CreateSensorSchema,
+  ListSensorsQuerySchema,
+  ReadingCreatedEventSchema,
+  SensorReadingSchema,
+  UpdateSensorSchema,
+} from '../src/index';
 
 describe('SensorReadingSchema', () => {
   const valid = {
@@ -72,5 +79,75 @@ describe('ReadingCreatedEventSchema', () => {
       },
     };
     expect(ReadingCreatedEventSchema.parse(event).type).toBe('reading.created');
+  });
+});
+
+describe('CreateSensorSchema & UpdateSensorSchema', () => {
+  it('accepts a valid sensor creation payload and normalises DevEUI to lowercase', () => {
+    const valid = {
+      deviceId: '2CBCBBFFFEA945C4',
+      name: 'Tripoli Port',
+      latitude: 34.455,
+      longitude: 35.823,
+      neighborhood: 'El Mina',
+    };
+    const parsed = CreateSensorSchema.parse(valid);
+    expect(parsed.deviceId).toBe('2cbcbbfffea945c4');
+    expect(parsed.status).toBe('active');
+    expect(parsed.isSimulated).toBe(false);
+  });
+
+  it('rejects an invalid DevEUI (not 16 hex chars)', () => {
+    expect(() =>
+      CreateSensorSchema.parse({
+        deviceId: 'invalid-dev-eui',
+        name: 'Invalid Node',
+        latitude: 34.4,
+        longitude: 35.8,
+      }),
+    ).toThrow();
+  });
+
+  it('rejects out-of-range coordinates', () => {
+    expect(() =>
+      CreateSensorSchema.parse({
+        deviceId: '2cbcbbfffea945c4',
+        name: 'Bad Lat',
+        latitude: 95.0,
+        longitude: 35.8,
+      }),
+    ).toThrow();
+  });
+
+  it('accepts partial updates via UpdateSensorSchema', () => {
+    const update = {
+      status: 'maintenance' as const,
+      neighborhood: 'Tripoli Center',
+    };
+    const parsed = UpdateSensorSchema.parse(update);
+    expect(parsed.status).toBe('maintenance');
+    expect(parsed.neighborhood).toBe('Tripoli Center');
+  });
+});
+
+describe('ListSensorsQuerySchema', () => {
+  it('defaults includeSimulated to true when omitted', () => {
+    expect(ListSensorsQuerySchema.parse({})).toEqual({ includeSimulated: true });
+  });
+
+  it('parses valid status and boolean strings', () => {
+    expect(
+      ListSensorsQuerySchema.parse({ status: 'retired', includeSimulated: 'false' }),
+    ).toEqual({
+      status: 'retired',
+      includeSimulated: false,
+    });
+  });
+
+  it('rejects invalid status and non-boolean strings', () => {
+    expect(() => ListSensorsQuerySchema.parse({ status: 'Active' })).toThrow();
+    expect(() => ListSensorsQuerySchema.parse({ status: 'offline' })).toThrow();
+    expect(() => ListSensorsQuerySchema.parse({ includeSimulated: '1' })).toThrow();
+    expect(() => ListSensorsQuerySchema.parse({ includeSimulated: 'TRUE' })).toThrow();
   });
 });

@@ -160,4 +160,110 @@ describe('API integration', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([]);
   });
+
+  describe('Sensor Registry CRUD', () => {
+    const adminKey = process.env.ADMIN_API_KEY ?? 'ci-test-admin-key';
+    // Unique throwaway DevEUI per run so repeated runs against the same stack
+    // never collide with each other or overwrite a real node.
+    const randomSuffix = Math.floor(Math.random() * 0xffffffff)
+      .toString(16)
+      .padStart(8, '0');
+    const testDevEui = `ffffffff${randomSuffix}`;
+
+    it('rejects POST /sensors when X-API-Key is missing', async () => {
+      const res = await fetch(`${API}/sensors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId: testDevEui,
+          name: 'Unauthorized Node',
+          latitude: 34.455,
+          longitude: 35.823,
+        }),
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects invalid query parameters on GET /sensors with 400', async () => {
+      const badStatus = await get('/sensors?status=InvalidStatus');
+      expect(badStatus.status).toBe(400);
+
+      const badSim = await get('/sensors?includeSimulated=1');
+      expect(badSim.status).toBe(400);
+    });
+
+    it('registers a new sensor with valid API key and returns 409 on duplicate', async () => {
+      const payload = {
+        deviceId: testDevEui,
+        name: 'Integration Test Throwaway Node',
+        latitude: 34.455,
+        longitude: 35.823,
+        neighborhood: 'El Mina',
+        status: 'active',
+        isSimulated: false,
+      };
+
+      const res = await fetch(`${API}/sensors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': adminKey,
+        },
+        body: JSON.stringify(payload),
+      });
+      expect(res.status).toBe(201);
+
+      const dup = await fetch(`${API}/sensors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': adminKey,
+        },
+        body: JSON.stringify(payload),
+      });
+      expect(dup.status).toBe(409);
+    });
+
+    it('GET /sensors/:deviceId returns the registered sensor', async () => {
+      const res = await fetch(`${API}/sensors/${testDevEui}`);
+      expect(res.status).toBe(200);
+      const sensor = (await res.json()) as Record<string, unknown>;
+      expect(sensor.deviceId).toBe(testDevEui);
+      expect(sensor.status).toBe('active');
+    });
+
+    it('updates sensor metadata via PATCH /sensors/:deviceId', async () => {
+      const res = await fetch(`${API}/sensors/${testDevEui}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': adminKey,
+        },
+        body: JSON.stringify({
+          neighborhood: 'Port Maritime Zone',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const updated = (await res.json()) as Record<string, unknown>;
+      expect(updated.neighborhood).toBe('Port Maritime Zone');
+    });
+
+    it('retires a sensor via DELETE /sensors/:deviceId and excludes it from active filter', async () => {
+      const res = await fetch(`${API}/sensors/${testDevEui}`, {
+        method: 'DELETE',
+        headers: {
+          'X-API-Key': adminKey,
+        },
+      });
+      expect(res.status).toBe(200);
+      const retired = (await res.json()) as Record<string, unknown>;
+      expect(retired.status).toBe('retired');
+      expect(retired.isActive).toBe(false);
+
+      const activeList = (await (await get('/sensors?status=active')).json()) as Array<{
+        deviceId: string;
+      }>;
+      expect(activeList.some((s) => s.deviceId === testDevEui)).toBe(false);
+    });
+  });
 });

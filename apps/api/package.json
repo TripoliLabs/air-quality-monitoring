@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check src",
     "clean": "rm -rf dist",
+    "test": "vitest run --exclude '**/*.integration.test.ts'",
     "test:integration": "vitest run"
   },
   "dependencies": {
