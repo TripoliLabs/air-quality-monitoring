@@ -24,6 +24,11 @@ both build routes below use them.
 make -C firmware test
 ```
 
+This includes `test/test_vectors.c`, which runs the payload encoder and the
+downlink parser against the test vectors in `packages/telemetry-codec/vectors/`.
+The TypeScript codec's tests read the same files, so a payload or downlink
+change made on one side only fails CI. Change the vectors first, then both codecs.
+
 ## Build
 
 ```bash

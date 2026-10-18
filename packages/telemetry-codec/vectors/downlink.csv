@@ -1,0 +1,24 @@
+# Shared downlink test vectors: the contract between the server encoder
+# (packages/telemetry-codec) and the firmware parser (firmware/core/aq_downlink.c).
+# Both test suites read this file:
+#   packages/telemetry-codec/test/vectors.test.ts
+#                                   encode(command, value) must equal `hex`, and
+#                                   decode(`hex`) must give the command back
+#   firmware/test/test_vectors.c    applying `hex` must set that field to `value`
+#                                   and leave the rest of the config alone
+#
+# Columns
+#   name      unique label, shown on failure
+#   command   setInterval (seconds) | setPmOffset (µg/m³ ×10) | setTempOffset (°C ×100)
+#   value     the command's integer argument
+#   hex       the downlink bytes: [opcode][argument, little-endian]
+name,command,value,hex
+interval_600,setInterval,600,015802
+interval_min,setInterval,1,010100
+interval_max,setInterval,65535,01ffff
+pm_offset_negative,setPmOffset,-35,02ddff
+pm_offset_zero,setPmOffset,0,020000
+pm_offset_max,setPmOffset,32767,02ff7f
+pm_offset_min,setPmOffset,-32768,020080
+temp_offset_positive,setTempOffset,250,03fa00
+temp_offset_negative,setTempOffset,-150,036aff
