@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  type ConfigResult,
   type DownlinkCommand,
+  decodeConfigReport,
   decodeDownlink,
   decodeUplink,
+  encodeConfigReport,
   encodeDownlink,
   encodeUplink,
   PRESENT_ENV,
@@ -92,11 +95,48 @@ describe('shared downlink vectors', () => {
     expect(vectors.length).toBeGreaterThan(0);
   });
 
-  it.each(vectors)('encodes $name to the expected bytes', (v) => {
+  it('has both accepted and rejected rows', () => {
+    expect(vectors.every((v) => v.result === 'applied' || v.result === 'out_of_range')).toBe(true);
+    expect(vectors.some((v) => v.result === 'out_of_range')).toBe(true);
+  });
+
+  const applied = vectors.filter((v) => v.result === 'applied');
+  const rejected = vectors.filter((v) => v.result === 'out_of_range');
+
+  it.each(applied)('encodes $name to the expected bytes', (v) => {
     expect(toHex(encodeDownlink(toCommand(v)))).toBe(v.hex);
+  });
+
+  // The server must never queue a command the node would throw away.
+  it.each(rejected)('refuses to encode $name', (v) => {
+    expect(() => encodeDownlink(toCommand(v))).toThrow(RangeError);
   });
 
   it.each(vectors)('decodes $name back to the command', (v) => {
     expect(decodeDownlink(fromHex(v.hex))).toEqual(toCommand(v));
+  });
+});
+
+describe('shared config report vectors', () => {
+  const vectors = loadVectors('report.csv');
+
+  const toReport = (v: Row) => ({
+    lastResult: Number(v.result) as ConfigResult,
+    lastCommand: Number(v.last_cmd),
+    intervalS: Number(v.interval),
+    pmOffsetX10: Number(v.pm_offset_x10),
+    tempOffsetX100: Number(v.temp_offset_x100),
+  });
+
+  it('loads the vector file', () => {
+    expect(vectors.length).toBeGreaterThan(0);
+  });
+
+  it.each(vectors)('decodes $name', (v) => {
+    expect(decodeConfigReport(fromHex(v.hex))).toEqual({ version: 1, ...toReport(v) });
+  });
+
+  it.each(vectors)('encodes $name to the expected bytes', (v) => {
+    expect(toHex(encodeConfigReport(toReport(v)))).toBe(v.hex);
   });
 });

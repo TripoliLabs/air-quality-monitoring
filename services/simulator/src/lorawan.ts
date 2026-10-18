@@ -65,11 +65,6 @@ export function deriveSession(
   };
 }
 
-/**
- * Build a "Unconfirmed Data Up" frame (fPort 2) with the session keys — the
- * device MAC encrypts the FRMPayload with AppSKey and computes the MIC with
- * NwkSKey. Returns the raw PHYPayload bytes.
- */
 /** The DevAddr (hex) a downlink PHYPayload is addressed to. */
 export function downlinkDevAddr(phy: Buffer): string {
   return fromWire(phy).getBuffers().DevAddr.toString('hex');
@@ -87,14 +82,24 @@ export function decryptDownlink(session: DeviceSession, phy: Buffer): Buffer {
   return decrypt(packet, Buffer.from(session.appSKey, 'hex'), Buffer.from(session.nwkSKey, 'hex'));
 }
 
-export function buildUplink(session: DeviceSession, fCnt: number, frmPayload: Buffer): Buffer {
+/**
+ * Build a "Unconfirmed Data Up" frame on `fPort` (2 for readings, 11 for config
+ * reports) with the session keys — the device MAC encrypts the FRMPayload with
+ * AppSKey and computes the MIC with NwkSKey. Returns the raw PHYPayload bytes.
+ */
+export function buildUplink(
+  session: DeviceSession,
+  fCnt: number,
+  frmPayload: Buffer,
+  fPort = 2,
+): Buffer {
   const packet = fromFields(
     {
       MType: 'Unconfirmed Data Up',
       DevAddr: Buffer.from(session.devAddr, 'hex'),
       FCtrl: { ADR: false, ACK: false, ADRACKReq: false, FPending: false },
       FCnt: fCnt,
-      FPort: 2,
+      FPort: fPort,
       payload: frmPayload,
     },
     Buffer.from(session.appSKey, 'hex'),

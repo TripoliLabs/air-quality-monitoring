@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  decodeConfigReport,
   decodeDownlink,
   decodeUplink,
   type DecodedPayload,
   type DownlinkCommand,
+  encodeConfigReport,
   encodeDownlink,
   encodeUplink,
   PAYLOAD_LENGTH,
@@ -108,7 +110,30 @@ describe('downlink config codec', () => {
     expect(() => decodeDownlink(new Uint8Array([0x7f, 0, 0]))).toThrow(/unknown downlink/i);
   });
 
+  it('refuses to encode a value the node would reject', () => {
+    expect(() => encodeDownlink({ command: 'setInterval', seconds: 30 })).toThrow(RangeError);
+    expect(() => encodeDownlink({ command: 'setInterval', seconds: 600.5 })).toThrow(RangeError);
+    expect(() => encodeDownlink({ command: 'setTempOffset', offsetX100: 5000 })).toThrow(
+      RangeError,
+    );
+  });
+
   it('throws on a short downlink', () => {
     expect(() => decodeDownlink(new Uint8Array([0x01]))).toThrow(/too short/i);
+  });
+});
+
+describe('config report codec', () => {
+  it('rejects a short report, an unknown version and an unknown result', () => {
+    expect(() => decodeConfigReport(new Uint8Array(8))).toThrow(/too short/i);
+    const bytes = encodeConfigReport({
+      lastResult: 1,
+      lastCommand: 1,
+      intervalS: 600,
+      pmOffsetX10: 0,
+      tempOffsetX100: 0,
+    });
+    expect(() => decodeConfigReport(Uint8Array.of(2, ...bytes.subarray(1)))).toThrow(/version/);
+    expect(() => decodeConfigReport(Uint8Array.of(1, 9, ...bytes.subarray(2)))).toThrow(/result/);
   });
 });

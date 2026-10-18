@@ -5,7 +5,8 @@
  * Implemented with RadioLib (https://github.com/jgromes/RadioLib), which drives
  * the SX1276 and runs the LoRaWAN MAC (OTAA join → session keys → Unconfirmed
  * Data Up). RadioLib is C++, so this file is .cpp; it exposes the C symbol
- * `lorawan_send_payload()` that main.cpp / core call.
+ * `lorawan_send()` (lora_esp32.h) that main.cpp calls. Any downlink received in
+ * the RX1/RX2 windows after the uplink is handed back to the caller.
  *
  * BUILD GUARD: the real implementation is compiled only when RadioLib's header
  * is on the include path. RadioLib is an ESP-IDF managed component
@@ -25,10 +26,9 @@
 #include <stdint.h>
 
 #include "esp_log.h"
+#include "lora_esp32.h"
 
 static const char *TAG = "lorawan";
-
-extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len);
 
 /* ----------------------------------------------------------------------------
  * LoRaWAN OTAA credentials (compile-time). PLACEHOLDERS — override at build time.
@@ -169,22 +169,41 @@ static int lorawan_join(void) {
     return 0;
 }
 
-extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len) {
+extern "C" int lorawan_send(const uint8_t *data, uint8_t len, uint8_t fport,
+                            aq_lorawan_downlink_t *down) {
+    if (down != NULL) {
+        down->received = 0;
+        down->len = 0;
+    }
     if (!s_joined) {
         if (lorawan_join() != 0) {
             return -1;
         }
     }
-    /* Unconfirmed Data Up on fPort 2 (isConfirmed defaults to false). */
-    const uint8_t fPort = 2;
-    int16_t state = s_node.sendReceive(const_cast<uint8_t *>(data), len, fPort);
+    /* Unconfirmed Data Up (isConfirmed defaults to false), then RX1/RX2. */
+    uint8_t rx[AQ_LORAWAN_DOWNLINK_MAX];
+    size_t rx_len = 0;
+    LoRaWANEvent_t event_down;
+    int16_t state = s_node.sendReceive(data, len, fport, rx, &rx_len, false, NULL, &event_down);
     if (state < RADIOLIB_ERR_NONE) {
         ESP_LOGE(TAG, "uplink failed: %d", state);
         return -1;
     }
     /* Persist the advanced frame counters so the next wake resumes cleanly. */
     lorawan_save_state();
-    ESP_LOGI(TAG, "uplink sent on fPort %u (%u bytes)", fPort, len);
+    ESP_LOGI(TAG, "uplink sent on fPort %u (%u bytes)", fport, len);
+
+    /* state > 0 is the RX window a downlink arrived in. A MAC-only downlink
+     * (fPort 0, handled inside RadioLib) carries no application payload. */
+    if (state > 0 && rx_len > 0 && down != NULL) {
+        if (rx_len > sizeof(down->data)) rx_len = sizeof(down->data);
+        memcpy(down->data, rx, rx_len);
+        down->len = rx_len;
+        down->fport = event_down.fPort;
+        down->received = 1;
+        ESP_LOGI(TAG, "downlink in RX%d on fPort %u (%u bytes)", state, event_down.fPort,
+                 (unsigned)rx_len);
+    }
     return 0;
 }
 
@@ -192,12 +211,17 @@ extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len) {
 /* =============================  FALLBACK STUB  ============================= */
 /* RadioLib is not on the include path (lean CMake build). Keep the symbol so the
  * firmware links and runs end-to-end except for the real RF hop. */
-extern "C" int lorawan_send_payload(const uint8_t *data, uint8_t len) {
+extern "C" int lorawan_send(const uint8_t *data, uint8_t len, uint8_t fport,
+                            aq_lorawan_downlink_t *down) {
     (void)data;
+    if (down != NULL) {
+        down->received = 0;
+        down->len = 0;
+    }
     ESP_LOGW(TAG,
-             "LoRaWAN not compiled in (RadioLib absent) — dropping %u-byte uplink. "
+             "LoRaWAN not compiled in (RadioLib absent) — dropping %u-byte uplink on fPort %u. "
              "Add the RadioLib managed component (main/idf_component.yml) for real transmission.",
-             len);
+             len, fport);
     return -1;
 }
 #endif /* AQ_HAVE_RADIOLIB */

@@ -1,0 +1,26 @@
+# Shared config-report test vectors: the contract between the firmware encoder
+# (firmware/core/aq_config.c) and the server decoder (packages/telemetry-codec).
+# The report is the uplink on fPort 11 that tells the server which settings a
+# node is running. Both test suites read this file:
+#   firmware/test/test_vectors.c            encode(state) must equal `hex`
+#   packages/telemetry-codec/test/vectors.test.ts
+#                                           decode(`hex`) must equal the columns,
+#                                           and encode(columns) must equal `hex`
+#
+# Columns
+#   name               unique label, shown on failure
+#   result             result of the last config downlink: 0 none since boot,
+#                      1 applied, 2 rejected (out of range), 3 rejected (malformed)
+#   last_cmd           opcode of that downlink, 0 = none
+#   interval           sample interval, seconds
+#   pm_offset_x10      PM2.5 offset, µg/m³ ×10
+#   temp_offset_x100   temperature offset, °C ×100
+#   hex                the 9 report bytes: [version][result][last_cmd][interval]
+#                      [pm_offset][temp_offset], little-endian
+name,result,last_cmd,interval,pm_offset_x10,temp_offset_x100,hex
+boot_defaults,0,0,300,0,0,0100002c0100000000
+applied_interval,1,1,600,0,0,010101580200000000
+rejected_out_of_range,2,1,300,0,0,0102012c0100000000
+rejected_unknown_command,3,127,300,0,0,01037f2c0100000000
+calibrated,1,2,300,-35,250,0101022c01ddfffa00
+range_limits,1,3,21600,-500,-1000,01010360540cfe18fc
