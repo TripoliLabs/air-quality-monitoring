@@ -36,7 +36,10 @@ export class OverviewController {
   @ApiOperation({ summary: 'Network-wide snapshot (online count, AQI, category breakdown)' })
   @ApiOkResponse({ type: NetworkOverviewDto })
   async overview(): Promise<NetworkOverview> {
-    const sensorRows = await this.relational.select({ deviceId: sensors.deviceId }).from(sensors);
+    const sensorRows = await this.relational
+      .select({ deviceId: sensors.deviceId })
+      .from(sensors)
+      .where(eq(sensors.isActive, true));
     const sensorsTotal = sensorRows.length;
 
     const latest = sensorsTotal

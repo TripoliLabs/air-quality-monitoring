@@ -1,3 +1,4 @@
+import { SENSOR_STATUSES } from '@aq/contracts';
 import {
   boolean,
   doublePrecision,
@@ -18,7 +19,10 @@ export const sensors = pgTable('sensors', {
   latitude: doublePrecision('latitude').notNull(),
   longitude: doublePrecision('longitude').notNull(),
   neighborhood: text('neighborhood'),
+  status: text('status', { enum: SENSOR_STATUSES }).notNull().default('active'),
   isActive: boolean('is_active').notNull().default(true),
+  installedAt: timestamp('installed_at', { withTimezone: true }),
+  isSimulated: boolean('is_simulated').notNull().default(false),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   batteryMv: integer('battery_mv'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
