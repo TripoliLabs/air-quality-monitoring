@@ -482,7 +482,9 @@ monitoring-data/
 
 # Backups
 backups/
+!deploy/backups/
 *.backup
+*.dump
 
 # Archives
 *.zip
@@ -585,6 +587,21 @@ firmware/managed_components/
 
 # pnpm store when installing inside a container
 .pnpm-store/
+
+# OpenTofu and Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
 
 # ============================================================================
 # Dashboard source that broader rules above would otherwise swallow

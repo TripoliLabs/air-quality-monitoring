@@ -1,0 +1,41 @@
+{
+    email {$ACME_EMAIL:admin@tripolilabs.org}
+}
+
+# Primary public domain: Web Dashboard + unified /api and /socket.io endpoints
+{$DOMAIN:localhost} {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # REST API endpoints on primary domain
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy api:3000
+    }
+
+    # Real-time WebSocket (Socket.IO) traffic
+    handle /socket.io/* {
+        reverse_proxy api:3000
+    }
+
+    # Static Web SPA Dashboard
+    handle {
+        reverse_proxy dashboard:80
+    }
+}
+
+# Dedicated API subdomain
+api.{$DOMAIN:localhost} {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    reverse_proxy api:3000
+}
