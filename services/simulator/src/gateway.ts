@@ -114,11 +114,14 @@ export class SemtechGateway {
       } catch {
         // ignore malformed PULL_RESP
       }
-      // Acknowledge the downlink (TX_ACK echoes the PULL_RESP token).
-      const ack = Buffer.alloc(4);
+      // Acknowledge the downlink: [version][PULL_RESP token:2][TX_ACK][gateway EUI:8].
+      // Without the EUI the bridge drops the ack, ChirpStack never marks the
+      // downlink as sent, and it re-sends it after every uplink.
+      const ack = Buffer.alloc(12);
       ack[0] = PROTO_VERSION;
       msg.copy(ack, 1, 1, 3);
       ack[3] = TX_ACK;
+      this.euiBytes.copy(ack, 4);
       this.sock.send(ack, this.port, this.host);
     }
   }

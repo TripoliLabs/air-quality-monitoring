@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../core/aq_config.h"
 #include "../core/aq_downlink.h"
 #include "../core/aq_payload.h"
 #include "test_framework.h"
@@ -12,7 +13,8 @@
 #define MAX_LINE 512
 #define MAX_FIELDS 20
 #define UPLINK_FIELDS 18
-#define DOWNLINK_FIELDS 4
+#define DOWNLINK_FIELDS 5
+#define REPORT_FIELDS 7
 
 static const char *vector_dir = DEFAULT_VECTOR_DIR;
 
@@ -130,11 +132,20 @@ static void test_downlink_vectors(void) {
             continue;
         }
 
-        /* Start from the defaults and move the one field the command targets;
-         * comparing the whole config also proves nothing else was touched. */
+        int applied = strcmp(col[4], "applied") == 0;
+        if (!applied && strcmp(col[4], "out_of_range") != 0) {
+            fail_vector("downlink.csv", col[0], "result is neither applied nor out_of_range");
+            continue;
+        }
+
+        /* Start from the defaults and move the one field the command targets
+         * (none for a rejected command); comparing the whole config also proves
+         * nothing else was touched. */
         aq_config_t expected;
         aq_config_init(&expected);
-        if (strcmp(col[1], "setInterval") == 0) {
+        if (!applied) {
+            /* expected stays at the defaults */
+        } else if (strcmp(col[1], "setInterval") == 0) {
             expected.sample_interval_s = (uint16_t)value;
         } else if (strcmp(col[1], "setPmOffset") == 0) {
             expected.pm_offset_x10 = (int16_t)value;
@@ -144,18 +155,61 @@ static void test_downlink_vectors(void) {
             fail_vector("downlink.csv", col[0], "command the firmware does not know");
             continue;
         }
+        const int expected_rc = applied ? AQ_DL_OK : AQ_DL_OUT_OF_RANGE;
 
         aq_config_t actual;
         aq_config_init(&actual);
         int rc = aq_downlink_apply(bytes, (size_t)len, &actual);
         tf_assertions++;
-        if (rc != 0 || actual.sample_interval_s != expected.sample_interval_s ||
+        if (rc != expected_rc || actual.sample_interval_s != expected.sample_interval_s ||
             actual.pm_offset_x10 != expected.pm_offset_x10 ||
             actual.temp_offset_x100 != expected.temp_offset_x100) {
             tf_failed++;
             printf("  FAIL downlink.csv [%s]: rc=%d interval=%u pm_offset=%d temp_offset=%d\n",
                    col[0], rc, actual.sample_interval_s, actual.pm_offset_x10,
                    actual.temp_offset_x100);
+        }
+        checked++;
+    }
+    fclose(f);
+    TEST_ASSERT(checked > 0);
+}
+
+static void test_report_vectors(void) {
+    FILE *f = open_vectors("report.csv");
+    if (f == NULL) return;
+
+    char line[MAX_LINE];
+    int checked = 0;
+    while (fgets(line, sizeof(line), f) != NULL) {
+        if (!is_vector_line(line)) continue;
+        char *col[MAX_FIELDS];
+        if (split_fields(line, col) != REPORT_FIELDS) {
+            fail_vector("report.csv", col[0], "wrong number of columns");
+            continue;
+        }
+        uint8_t expected[AQ_REPORT_LEN];
+        if (parse_hex(col[6], expected, sizeof(expected)) != AQ_REPORT_LEN) {
+            fail_vector("report.csv", col[0], "hex is not AQ_REPORT_LEN bytes");
+            continue;
+        }
+
+        aq_node_state_t st = {
+            .cfg = {.sample_interval_s = (uint16_t)strtoul(col[3], NULL, 10),
+                    .pm_offset_x10 = (int16_t)strtol(col[4], NULL, 10),
+                    .temp_offset_x100 = (int16_t)strtol(col[5], NULL, 10)},
+            .report_pending = 1,
+            .last_cmd = (uint8_t)strtoul(col[2], NULL, 10),
+            .last_result = (uint8_t)strtoul(col[1], NULL, 10),
+        };
+        uint8_t actual[AQ_REPORT_LEN];
+        aq_config_report_encode(&st, actual);
+        tf_assertions++;
+        if (memcmp(expected, actual, AQ_REPORT_LEN) != 0) {
+            tf_failed++;
+            printf("  FAIL report.csv [%s]: expected %s, got ", col[0], col[6]);
+            for (int i = 0; i < AQ_REPORT_LEN; i++) printf("%02x", actual[i]);
+            printf("\n");
         }
         checked++;
     }
@@ -170,5 +224,6 @@ int main(int argc, char **argv) {
     printf("shared codec vector tests (%s)\n", vector_dir);
     RUN_TEST(test_uplink_vectors);
     RUN_TEST(test_downlink_vectors);
+    RUN_TEST(test_report_vectors);
     TEST_SUMMARY();
 }

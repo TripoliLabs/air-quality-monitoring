@@ -5,7 +5,7 @@ CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Icore
 BUILD := build
 
-CORE := core/aq_payload.c core/aq_node.c
+CORE := core/aq_payload.c core/aq_node.c core/aq_downlink.c core/aq_config.c
 
 .PHONY: host test clean
 host: $(BUILD)/aq-node-sim ## build the host node simulator binary
@@ -17,9 +17,10 @@ $(BUILD)/aq-node-sim: $(CORE) sim/sensors_sim.c sim/main.c
 # Test vectors shared with the TypeScript codec; both suites must pass them.
 VECTORS := ../packages/telemetry-codec/vectors
 
-test: $(BUILD)/test_payload $(BUILD)/test_downlink $(BUILD)/test_sample $(BUILD)/test_vectors ## build + run the host unit tests
+test: $(BUILD)/test_payload $(BUILD)/test_downlink $(BUILD)/test_config $(BUILD)/test_sample $(BUILD)/test_vectors ## build + run the host unit tests
 	./$(BUILD)/test_payload
 	./$(BUILD)/test_downlink
+	./$(BUILD)/test_config
 	./$(BUILD)/test_sample
 	./$(BUILD)/test_vectors $(VECTORS)
 
@@ -31,7 +32,11 @@ $(BUILD)/test_downlink: core/aq_downlink.c test/test_downlink.c
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
-$(BUILD)/test_vectors: core/aq_payload.c core/aq_downlink.c test/test_vectors.c
+$(BUILD)/test_config: core/aq_downlink.c core/aq_config.c test/test_config.c
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $^ -lm -o $@
+
+$(BUILD)/test_vectors: core/aq_payload.c core/aq_downlink.c core/aq_config.c test/test_vectors.c
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 

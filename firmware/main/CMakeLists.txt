@@ -12,8 +12,10 @@ idf_component_register(
     "../core/aq_payload.c"
     "../core/aq_node.c"
     "../core/aq_downlink.c"
+    "../core/aq_config.c"
     "../adapters/esp32/i2c_esp32.c"
     "../adapters/esp32/pmu_esp32.c"
+    "../adapters/esp32/config_store_esp32.c"
     "../adapters/esp32/sensors_esp32.c"
     "../adapters/esp32/lora_esp32.cpp"
   INCLUDE_DIRS
@@ -24,4 +26,5 @@ idf_component_register(
     esp_driver_uart
     esp_adc
     esp_timer
+    nvs_flash
 )

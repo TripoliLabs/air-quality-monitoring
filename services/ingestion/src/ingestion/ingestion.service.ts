@@ -6,7 +6,12 @@ import {
 import { createTelemetryDb, readings, type TelemetryDb } from '@aq/db';
 import { calculateAqi } from '@aq/domain';
 import { createCounter, createLogger } from '@aq/observability';
-import { decodeUplink } from '@aq/telemetry-codec';
+import {
+  CONFIG_REPORT_FPORT,
+  ConfigResult,
+  decodeConfigReport,
+  decodeUplink,
+} from '@aq/telemetry-codec';
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
@@ -16,6 +21,15 @@ const UPLINK_TOPIC = 'application/+/device/+/event/up';
 const READINGS_CHANNEL = 'readings'; // Redis Pub/Sub channel for realtime fan-out
 const LATEST_KEY = (deviceId: string): string => `sensor:latest:${deviceId}`;
 const DATA_FPORT = 2; // telemetry uplinks (config downlinks use fPort 10)
+// The settings each node last reported (fPort 11). No TTL: it stays true until
+// the node reports again.
+const CONFIG_KEY = (deviceId: string): string => `sensor:config:${deviceId}`;
+const RESULT_NAMES: Record<ConfigResult, string> = {
+  [ConfigResult.None]: 'none',
+  [ConfigResult.Applied]: 'applied',
+  [ConfigResult.OutOfRange]: 'out_of_range',
+  [ConfigResult.Malformed]: 'malformed',
+};
 // Latest-value cache TTL: refreshed every uplink (~5 min) while a sensor is alive;
 // a dead sensor's stale "latest" then expires instead of lingering forever.
 const LATEST_TTL_SECONDS = 7200; // 2h
@@ -82,6 +96,11 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       const uplink = ChirpStackUplinkSchema.parse(JSON.parse(raw.toString('utf8')));
       const deviceId = uplink.deviceInfo.devEui;
 
+      if (uplink.fPort === CONFIG_REPORT_FPORT) {
+        await this.handleConfigReport(deviceId, uplink.data, uplink.time);
+        return;
+      }
+
       // Only telemetry uplinks (fPort 2) decode as readings — a config downlink
       // channel now uses fPort 10, and other ports aren't our payload layout.
       if (uplink.fPort !== DATA_FPORT) {
@@ -98,6 +117,12 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       // reading would broadcast "AQI 0 / good" for a node with no working PM sensor
       // — worse than the honest data gap. So drop partial readings (and count them,
       // so the missing sensor is visible in metrics rather than silently absent).
+      if (!decoded.sensorsPresent?.pm && !decoded.sensorsPresent?.env) {
+        // Every sensor failed: the node still sends its battery as a heartbeat.
+        this.readingsDropped.add(1, { reason: 'no_sensors' });
+        this.log.warn('heartbeat without sensor data', { deviceId, batteryMv: decoded.batteryMv });
+        return;
+      }
       if (!decoded.sensorsPresent?.pm || !decoded.sensorsPresent?.env) {
         this.readingsDropped.add(1, { reason: 'incomplete_sensors' });
         this.log.warn('dropping incomplete reading', { deviceId, present: decoded.sensorsPresent });
@@ -170,6 +195,24 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       this.readingsDropped.add(1, { reason: 'error' });
       this.log.error('failed to ingest uplink', { topic, error: String(err) });
     }
+  }
+
+  /** Cache the settings a node reports it is running (after a config downlink or
+   * a cold boot), so the server can confirm a change took effect. */
+  private async handleConfigReport(deviceId: string, data: string, time?: string): Promise<void> {
+    const report = decodeConfigReport(new Uint8Array(Buffer.from(data, 'base64')));
+    const reportedAt = time && !Number.isNaN(Date.parse(time)) ? new Date(time) : new Date();
+    const config = {
+      deviceId,
+      intervalS: report.intervalS,
+      pmOffset: report.pmOffsetX10 / 10,
+      temperatureOffset: report.tempOffsetX100 / 100,
+      lastCommand: report.lastCommand,
+      lastResult: RESULT_NAMES[report.lastResult],
+      reportedAt: reportedAt.toISOString(),
+    };
+    await this.redis.set(CONFIG_KEY(deviceId), JSON.stringify(config));
+    this.log.info('config report', config);
   }
 
   private telemetryUrl(): string {

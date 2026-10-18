@@ -23,12 +23,25 @@
  * heterogeneous fleets can advertise which sensors they carry. Legacy firmware
  * that sent 0 decodes as version 0 == the same layout with all sensors present.
  *
+ * Changing the layout: deployed nodes keep sending the old version until they
+ * are reflashed, so the server must decode every version still in the field.
+ *   1. Add vectors for the new version to packages/telemetry-codec/vectors and
+ *      keep the old ones, which become decode-only rows.
+ *   2. Teach the TS decoder the new version first, and deploy the server.
+ *   3. Only then bump AQ_PAYLOAD_VERSION and change the encoder here.
+ * The version is 4 bits, so retire a version from the decoder once no node
+ * sends it any more.
+ *
  * Both codecs are checked against the shared test vectors in
  * packages/telemetry-codec/vectors (see test/test_vectors.c): change the layout
  * there first, then here and in the TS codec.
  */
 #define AQ_PAYLOAD_LEN 13
 #define AQ_PAYLOAD_VERSION 1
+
+/* Readings go up on fPort 2; config downlinks and reports use their own ports
+ * (AQ_DOWNLINK_FPORT, AQ_REPORT_FPORT). */
+#define AQ_DATA_FPORT 2
 
 /* Sensor-presence bits (high nibble of byte 12). */
 #define AQ_PRESENT_PM 0x10  /* pm25 + pm10 populated */
