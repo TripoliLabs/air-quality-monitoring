@@ -20,7 +20,7 @@ interface HealthResult {
   checks: Record<string, string>;
 }
 
-@Controller('health')
+@Controller(['health', 'healthz'])
 export class HealthController {
   constructor(
     @Inject(RELATIONAL_DB) private readonly relational: RelationalDb,
