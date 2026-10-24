@@ -327,7 +327,32 @@ pnpm --filter @aq/api test           # (add tests under apps/api)
 cd firmware && pio test
 ```
 
-> Integration tests (a composed multi-service test run) will be added with the deployment infrastructure.
+Integration tests run against the local development stack. Set `ADMIN_API_KEY`
+to a test credential in the environment used by Compose and both test commands,
+then start `docker compose up -d --build api ingestion`. Wait for `/health` on
+ports 3000 and 3001 before running:
+
+```bash
+pnpm --filter @aq/api test:integration
+pnpm --filter @aq/ingestion test:integration
+```
+
+Run these against development/test services: the tests create sensor data and
+registered test devices. Configuration recovery tests isolate Redis state with
+random prefixes; HTTP/MQTT tests clean only their own command state and retire
+their registered devices.
+
+The **CI** workflow keeps two jobs: **quality** (lint, shared-source lint,
+typecheck, build, unit tests, firmware host tests) and **integration** (the slim
+API/ingestion stack and recovery regressions). Maintainers should require the
+`quality` and `integration` status checks before merging; workflow files alone
+do not configure branch protection. No repository settings are changed here.
+
+Failures upload JUnit reports and, for integration failures, bounded service logs
+as artifacts retained for seven days. The full ChirpStack/simulator scenario and
+ESP32 cross-compilation remain local checks. See
+[remote configuration verification](docs/remote-node-configuration-verification.md)
+for the current results and physical-node acceptance still required by issue #53.
 
 ---
 
