@@ -54,6 +54,7 @@ Funding note: apply for **DO Open Source credits** (OSI license ✓, but small �
 **Implementation pointers:**
 - `infra/` — one reusable OpenTofu module for Hetzner (CX42 + block volume + firewall + cloud-init that pulls up `docker-compose.yml`), instantiated twice: `staging` (with the simulator) and `prod` (without).
 - Telemetry DB stays on the box (self-hosted full-TSL Timescale) — no managed telemetry DB.
+- **Implemented:** see [`production-deployment.md`](production-deployment.md) for the complete production architecture, Caddy edge reverse proxy, secrets automation, dual-tier backups, and CI/CD deployment pipeline (Issue #51).
 
 ---
 

@@ -1,0 +1,9 @@
+hcloud_token       = "your-hetzner-cloud-api-token"
+server_type        = "cx32"
+location           = "fsn1"
+image              = "ubuntu-24.04"
+volume_size        = 50
+ssh_keys           = ["admin-key"]
+allowed_ssh_ips    = ["198.51.100.5/32"]
+tailscale_auth_key = "tskey-auth-k..."
+domain_name        = "staging.aq.tripolilabs.org"
