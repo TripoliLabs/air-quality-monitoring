@@ -1,5 +1,13 @@
 # Remote configuration verification — October 24, 2026
 
+> **Status:** Software implementation and local verification are complete.
+> **Result:** 380 distinct TypeScript cases and 121 firmware host assertions passed.
+> **E2E:** Configuration applied through ChirpStack/simulator and persisted across restart.
+> **CI:** Hosted `quality` and `integration` passed for implementation commit `625db6a`.
+> **Known limitation:** Physical hardware acceptance for #53 remains outstanding.
+> **Dependency:** Draft PR #61 depends on #59; rebase and coordinate after #59 merges.
+> **Recommendation:** Keep #61 as draft and leave #53 open until acceptance is verified.
+
 ## Source and dependency status
 
 Branch: `feature/remote-node-configuration-api`, in the isolated
@@ -15,7 +23,7 @@ Upstream was rechecked after the regression work:
 - PR #59 remains draft/open at `5878af370322b81b7c4596e4348b3296f812ec7e`.
 - This work depends on #59 and reuses its firmware, codecs, and simulator.
   The ingestion report handler is the deliberate integration overlap. Rebase
-  and coordinate that overlap after #59 merges before upstream submission.
+  and coordinate that overlap after #59 merges before marking the PR ready.
 
 ## Completed verification
 
@@ -182,7 +190,6 @@ correlation. Timeouts cannot cancel commands already queued in ChirpStack, and a
 crash after publication can cause duplicates. These limitations remain explicit
 in operator documentation and regression assertions.
 
-The local implementation, verification, walkthrough, and second review are
-complete. The user authorized publication; upstream/main and #59 were rechecked
-and remain unchanged. Submit as a draft dependent on #59, and do not claim the
-entire hardware issue is closed.
+The software implementation and local verification are complete. Hardware
+acceptance remains outstanding. Published as draft PR #61, dependent on #59;
+keep #53 open until its remaining acceptance criteria are verified.
