@@ -1,12 +1,12 @@
 # Remote configuration verification — October 24, 2026
 
-> **Status:** Software implementation and local verification are complete.
-> **Result:** 380 distinct TypeScript cases and 121 firmware host assertions passed.
-> **E2E:** Configuration applied through ChirpStack/simulator and persisted across restart.
-> **CI:** Hosted `quality` and `integration` passed for implementation commit `625db6a`.
-> **Known limitation:** Physical hardware acceptance for #53 remains outstanding.
-> **Dependency:** Draft PR #61 depends on #59; rebase and coordinate after #59 merges.
-> **Recommendation:** Keep #61 as draft and leave #53 open until acceptance is verified.
+> - **Status:** Software implementation and local verification are complete.
+> - **Result:** 380 distinct TypeScript cases and 121 firmware host assertions passed.
+> - **E2E:** Configuration applied through ChirpStack/simulator and persisted across restart.
+> - **CI:** Hosted `quality` and `integration` passed for implementation commit `625db6a`.
+> - **Known limitation:** Physical hardware acceptance for #53 remains outstanding.
+> - **Dependency:** Draft PR #61 depends on #59; rebase and coordinate after #59 merges.
+> - **Recommendation:** Keep #61 as draft and leave #53 open until acceptance is verified.
 
 ## Source and dependency status
 
