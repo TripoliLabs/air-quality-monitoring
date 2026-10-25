@@ -12,8 +12,8 @@ both build routes below use them.
 
 | Path | What |
 |------|------|
-| `core/` | Portable C: sensor HAL, payload codec, downlink config (host- and target-buildable) |
-| `adapters/esp32/` | On-target drivers: PMS7003, BME280, AXP2101 PMU, LoRaWAN |
+| `core/` | Portable C: sensor HAL, payload codec, downlink config, remote-config state (host- and target-buildable) |
+| `adapters/esp32/` | On-target drivers: PMS7003, BME280, AXP2101 PMU, LoRaWAN, NVS config store |
 | `src/main.cpp` | On-target entrypoint |
 | `main/` | ESP-IDF `main` component (source list + RadioLib dependency) |
 | `sim/`, `test/` | Host simulator and unit tests |
@@ -24,8 +24,9 @@ both build routes below use them.
 make -C firmware test
 ```
 
-This includes `test/test_vectors.c`, which runs the payload encoder and the
-downlink parser against the test vectors in `packages/telemetry-codec/vectors/`.
+This includes `test/test_vectors.c`, which runs the payload encoder, the
+downlink parser and the config report against the test vectors in
+`packages/telemetry-codec/vectors/`.
 The TypeScript codec's tests read the same files, so a payload or downlink
 change made on one side only fails CI. Change the vectors first, then both codecs.
 
@@ -69,19 +70,40 @@ pio device monitor
 A healthy first boot logs the PMU coming up, `initializing SX1276 radio`,
 `new OTAA join`, then `uplink sent`.
 
-## Bench test without sensors
+## Remote configuration
 
-With no sensors wired the node has nothing to report, so it skips the uplink
-and never joins. To test the radio path alone, add this flag to
-`PLATFORMIO_BUILD_FLAGS`:
+The sample interval and the PM2.5 and temperature calibration offsets can be
+changed from the server without a reflash. Queue a downlink on fPort 10 in
+ChirpStack (`encodeDownlink()` in `packages/telemetry-codec` builds the bytes).
+The node:
 
-```
--DAQ_BENCH_SEND_WITHOUT_SENSORS
-```
+1. receives it in the receive window after its next uplink and applies it at
+   once, so the new interval already governs the sleep that follows;
+2. stores it in NVS, so it survives a power cut;
+3. wakes about 2 minutes later and sends a config report on fPort 11 instead of a
+   reading: the result of the command and every active setting. Ingestion caches
+   it in Redis as `sensor:config:<devEui>`.
 
-The node then joins and sends a payload with every sensor-presence bit clear.
-ChirpStack shows the join and the uplink; ingestion drops the reading as
-incomplete instead of storing zeros. Leave the flag out of field builds.
+| Setting | Command | Accepted range |
+|---------|---------|----------------|
+| Sample interval | `setInterval` | 120 s to 6 h |
+| PM2.5 offset | `setPmOffset` | ±50 µg/m³ |
+| Temperature offset | `setTempOffset` | ±10 °C |
+
+A value outside the range is rejected: the node keeps its setting and its report
+says `out_of_range`. A failed report is not retried, so if no report arrives,
+send the command again. After a cold boot the node also sends one report, after
+its first reading, with the settings it loaded from flash. The logic lives in
+`core/aq_config.c`, so the host build and the simulator run the same decisions.
+
+## Running without sensors
+
+A node whose sensors have all failed, or a bench board with none wired, still
+joins and sends every interval. The payload carries the battery voltage with
+every sensor-presence bit clear, so ingestion logs a heartbeat and stores no
+reading. This keeps a node with a dead sensor reachable for config downlinks and
+visibly alive. ChirpStack shows the join and the uplinks, which is enough to test
+the radio path on its own.
 
 ## Flashing from WSL
 
@@ -97,6 +119,7 @@ DLOS8N gateway and ChirpStack: PMU bring-up, radio init on the default pin map,
 OTAA join, and an uplink on fPort 2 decoded by ingestion.
 
 Not yet verified on hardware: the PMS7003 UART and BME280 I2C drivers with real
-sensors attached, battery readings, deep-sleep current, and session restore
-across wake cycles. The SX1262 variant of the T-Beam needs a different radio
+sensors attached, battery readings, deep-sleep current, session restore across
+wake cycles, and remote configuration (a downlink applied, reported on fPort 11
+and kept across a power cut). The SX1262 variant of the T-Beam needs a different radio
 class and pin map.

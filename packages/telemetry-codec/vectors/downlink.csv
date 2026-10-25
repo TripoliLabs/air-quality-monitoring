@@ -2,23 +2,36 @@
 # (packages/telemetry-codec) and the firmware parser (firmware/core/aq_downlink.c).
 # Both test suites read this file:
 #   packages/telemetry-codec/test/vectors.test.ts
-#                                   encode(command, value) must equal `hex`, and
-#                                   decode(`hex`) must give the command back
-#   firmware/test/test_vectors.c    applying `hex` must set that field to `value`
-#                                   and leave the rest of the config alone
+#                                   applied rows: encode(command, value) must equal
+#                                   `hex`; out_of_range rows: encode must refuse.
+#                                   decode(`hex`) must give the command back either way
+#   firmware/test/test_vectors.c    applied rows: applying `hex` must set that field
+#                                   to `value` and leave the rest of the config alone;
+#                                   out_of_range rows: it must refuse and change nothing
 #
 # Columns
 #   name      unique label, shown on failure
 #   command   setInterval (seconds) | setPmOffset (µg/m³ ×10) | setTempOffset (°C ×100)
 #   value     the command's integer argument
 #   hex       the downlink bytes: [opcode][argument, little-endian]
-name,command,value,hex
-interval_600,setInterval,600,015802
-interval_min,setInterval,1,010100
-interval_max,setInterval,65535,01ffff
-pm_offset_negative,setPmOffset,-35,02ddff
-pm_offset_zero,setPmOffset,0,020000
-pm_offset_max,setPmOffset,32767,02ff7f
-pm_offset_min,setPmOffset,-32768,020080
-temp_offset_positive,setTempOffset,250,03fa00
-temp_offset_negative,setTempOffset,-150,036aff
+#   result    applied | out_of_range (accepted ranges: interval 120..21600 s,
+#             PM offset ±500, temperature offset ±1000)
+name,command,value,hex,result
+interval_600,setInterval,600,015802,applied
+interval_min,setInterval,120,017800,applied
+interval_max,setInterval,21600,016054,applied
+interval_below_min,setInterval,119,017700,out_of_range
+interval_zero,setInterval,0,010000,out_of_range
+interval_above_max,setInterval,21601,016154,out_of_range
+interval_u16_max,setInterval,65535,01ffff,out_of_range
+pm_offset_negative,setPmOffset,-35,02ddff,applied
+pm_offset_zero,setPmOffset,0,020000,applied
+pm_offset_max,setPmOffset,500,02f401,applied
+pm_offset_min,setPmOffset,-500,020cfe,applied
+pm_offset_above_max,setPmOffset,501,02f501,out_of_range
+pm_offset_i16_min,setPmOffset,-32768,020080,out_of_range
+temp_offset_positive,setTempOffset,250,03fa00,applied
+temp_offset_negative,setTempOffset,-150,036aff,applied
+temp_offset_max,setTempOffset,1000,03e803,applied
+temp_offset_min,setTempOffset,-1000,0318fc,applied
+temp_offset_below_min,setTempOffset,-1001,0317fc,out_of_range

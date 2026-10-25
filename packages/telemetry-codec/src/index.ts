@@ -114,7 +114,40 @@ export type DownlinkCommand =
   | { command: 'setPmOffset'; offsetX10: number }
   | { command: 'setTempOffset'; offsetX100: number };
 
+/** Ranges the firmware accepts (AQ_INTERVAL_* / AQ_*_OFFSET_MAX_* in aq_downlink.h).
+ * A node rejects anything outside them and keeps its current setting. */
+export const DOWNLINK_LIMITS = {
+  intervalMinS: 120,
+  intervalMaxS: 21600,
+  pmOffsetMaxX10: 500,
+  tempOffsetMaxX100: 1000,
+} as const;
+
+function checkRange(name: string, value: number, min: number, max: number): void {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new RangeError(`${name} must be an integer from ${min} to ${max}, got ${value}`);
+  }
+}
+
+/** Throw a RangeError if the node would reject `cmd`. */
+export function assertDownlinkInRange(cmd: DownlinkCommand): void {
+  const l = DOWNLINK_LIMITS;
+  switch (cmd.command) {
+    case 'setInterval':
+      checkRange('seconds', cmd.seconds, l.intervalMinS, l.intervalMaxS);
+      break;
+    case 'setPmOffset':
+      checkRange('offsetX10', cmd.offsetX10, -l.pmOffsetMaxX10, l.pmOffsetMaxX10);
+      break;
+    case 'setTempOffset':
+      checkRange('offsetX100', cmd.offsetX100, -l.tempOffsetMaxX100, l.tempOffsetMaxX100);
+      break;
+  }
+}
+
+/** Encode a config command. Refuses (RangeError) a value the node would reject. */
 export function encodeDownlink(cmd: DownlinkCommand): Uint8Array {
+  assertDownlinkInRange(cmd);
   const bytes = new Uint8Array(3);
   const view = new DataView(bytes.buffer);
   switch (cmd.command) {
@@ -133,6 +166,8 @@ export function encodeDownlink(cmd: DownlinkCommand): Uint8Array {
   }
 }
 
+/** Decode the bytes on the wire. Does not range-check: a node receiving an
+ * out-of-range command decodes it and then rejects it. */
 export function decodeDownlink(bytes: Uint8Array): DownlinkCommand {
   if (bytes.length < 3) {
     throw new Error(`Downlink too short: expected 3, got ${bytes.length}`);
@@ -148,4 +183,72 @@ export function decodeDownlink(bytes: Uint8Array): DownlinkCommand {
     default:
       throw new Error(`Unknown downlink command 0x${bytes[0].toString(16)}`);
   }
+}
+
+// ============================== Config report ===============================
+// The uplink a node sends after a config downlink (and once after a cold boot)
+// so the server can confirm which settings are active. Mirrors
+// firmware/core/aq_config.{h,c}. Sent on fPort CONFIG_REPORT_FPORT, 9 bytes LE:
+//   [version:1][lastResult:1][lastCommand:1][intervalS:u16][pmOffsetX10:i16]
+//   [tempOffsetX100:i16]
+
+export const CONFIG_REPORT_FPORT = 11;
+export const CONFIG_REPORT_LENGTH = 9;
+export const CONFIG_REPORT_VERSION = 1;
+
+/** Result of the last config downlink, as the node reports it. */
+export const ConfigResult = {
+  None: 0, // no config downlink since boot
+  Applied: 1,
+  OutOfRange: 2, // rejected; config unchanged
+  Malformed: 3, // rejected; config unchanged
+} as const;
+export type ConfigResult = (typeof ConfigResult)[keyof typeof ConfigResult];
+
+export interface ConfigReport {
+  version: number;
+  lastResult: ConfigResult;
+  /** Opcode of the last config downlink (see DownlinkOpcode), 0 = none since boot. */
+  lastCommand: number;
+  intervalS: number;
+  pmOffsetX10: number;
+  tempOffsetX100: number;
+}
+
+export function decodeConfigReport(bytes: Uint8Array): ConfigReport {
+  if (bytes.length < CONFIG_REPORT_LENGTH) {
+    throw new Error(
+      `Config report too short: expected ${CONFIG_REPORT_LENGTH}, got ${bytes.length}`,
+    );
+  }
+  const version = bytes[0];
+  if (version !== CONFIG_REPORT_VERSION) {
+    throw new Error(`Unsupported config report version ${version}`);
+  }
+  const lastResult = bytes[1];
+  if (lastResult > ConfigResult.Malformed) {
+    throw new Error(`Unknown config result ${lastResult}`);
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return {
+    version,
+    lastResult: lastResult as ConfigResult,
+    lastCommand: bytes[2],
+    intervalS: view.getUint16(3, true),
+    pmOffsetX10: view.getInt16(5, true),
+    tempOffsetX100: view.getInt16(7, true),
+  };
+}
+
+/** Encode a config report as the firmware would (used by tests and tooling). */
+export function encodeConfigReport(r: Omit<ConfigReport, 'version'>): Uint8Array {
+  const bytes = new Uint8Array(CONFIG_REPORT_LENGTH);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = CONFIG_REPORT_VERSION;
+  bytes[1] = r.lastResult;
+  bytes[2] = r.lastCommand;
+  view.setUint16(3, r.intervalS, true);
+  view.setInt16(5, r.pmOffsetX10, true);
+  view.setInt16(7, r.tempOffsetX100, true);
+  return bytes;
 }

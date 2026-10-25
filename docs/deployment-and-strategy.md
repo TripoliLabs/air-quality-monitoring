@@ -157,7 +157,7 @@ So: a handful of extra measurements per node is practical; an open-ended per-nod
 ### 5d. Config changes via LoRaWAN downlinks (✅ built)
 
 You **cannot** push firmware over LoRa practically, but you **can** push small **downlink commands** — implemented. A command schema (`[opcode][args]` on fPort 10: `setInterval` / `setPmOffset` / `setTempOffset`) lives in both C (`firmware/core/aq_downlink.{c,h}`, host-tested) and TS (`packages/telemetry-codec`), plus a ChirpStack enqueue helper. The simulator receives + decrypts + decodes downlinks end-to-end (verified). Extend the command set as needed.
-- **Last mile (hardware):** wire `aq_downlink_apply()` into the on-chip LoRaWAN RX callback so a real node applies the config (the parser is done + host-tested; the on-target hook isn't).
+- **On the node (built, host-tested; not yet flashed):** after each uplink the firmware applies a config downlink, keeps it in NVS so it survives a power cut, and confirms it with a **config report** on fPort 11 (9 bytes: result of the last command + the active settings), which ingestion caches in Redis as `sensor:config:<devEui>`. Values outside the accepted ranges (interval 120 s–6 h, PM offset ±50 µg/m³, temperature offset ±10 °C) are rejected and reported as such; the TS encoder refuses them too. The report goes out ~2 min after the uplink that carried the change, so a change is confirmed within two uplinks. See `firmware/core/aq_config.h`.
 - **Timing caveat:** Class A nodes only open an RX window *right after an uplink*, so a queued downlink lands up to one sample-interval later (and is gateway-duty-cycle limited). Fine for occasional config; don't expect instant.
 
 ### 5e. OTA: deferred, but prepare the ground now
@@ -172,7 +172,7 @@ You **cannot** push firmware over LoRa practically, but you **can** push small *
 
 **Plan:**
 1. Phase 1 (≤10 nodes): USB reflash is fine. Stabilize firmware.
-2. ✅ **Downlink config channel** (§5d) — built (schema + round-trip); remaining: the on-target RX hook.
+2. ✅ **Downlink config channel** (§5d) — built, including the on-target apply, NVS persistence and the config report; remaining: verify on a flashed node.
 3. ✅ **`partitions.csv`** — created with an OTA-capable layout; unlocks **BLE OTA** later (technician pushes firmware from a phone/laptop next to the node).
 4. ✅ **Byte-12 version byte** (§5b) — implemented for safe rollouts.
 5. Skip FUOTA.
@@ -220,8 +220,8 @@ Mechanism:
 1. **`infra/`** — one OpenTofu Hetzner module (CX42 + block volume + firewall + cloud-init running `docker-compose.yml`), instantiated for `staging` (with the simulator) and `prod` (real hardware); verify `hcloud` access.
 2. **Backups + secrets delivery (§6)** — pgBackRest/WAL-G off-box **with a tested restore**, plus the deploy workflow that renders `app.env` from GitHub Environment secrets. Do this *with* infra, not after — the box shouldn't run unbacked.
 3. **Observability → Cloud** — mount `config.cloud.alloy` + `GRAFANA_CLOUD_*` in the deployment; add a contact point + battery/disk metrics for the remaining alerts (§4).
-4. **On-target firmware** — cross-compile + flash a real T-Beam; validate drivers/AXP192/RadioLib/OTAA join; wire `aq_downlink_apply()` into the LoRaWAN RX callback.
-5. **Single-source codec generation** (§5b) — replace the hand-mirrored C/TS codecs before the next sensor.
+4. **On-target firmware** — cross-compile + flash a real T-Beam; validate drivers/AXP192/RadioLib/OTAA join; confirm a config downlink is applied, reported and kept across a power cut.
+5. ✅ **Codec drift check** (§5b) — shared test vectors in `packages/telemetry-codec/vectors` that both the C and TS suites must pass (uplink, downlink, config report). Generating both codecs from one definition stays optional.
 
 **Done since this doc was written:** ✅ Mosquitto broker swap · ✅ Alloy collector + dashboards + log-scoping + first alerts · ✅ `partitions.csv` · ✅ downlink config channel · ✅ byte-12 payload versioning · ✅ simulator idempotent re-provisioning.
 
