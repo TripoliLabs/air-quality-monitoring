@@ -17,6 +17,9 @@ Open-source distributed air quality monitoring network for Tripoli, Lebanon usin
 > **Deployment & hosting strategy:** see [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md)
 > — Hetzner (self-hosted, staging + prod), self-hosted Timescale (TigerData retired),
 > Mosquitto, Alloy → Grafana Cloud, backups, secrets delivery, firmware roadmap.
+>
+> **Production deployment & runbooks:** see [`docs/production-deployment.md`](docs/production-deployment.md)
+> — OpenTofu (Hetzner), Caddy, secrets, dual-tier backups & CI/CD pipeline (Issue #51).
 
 ## Architecture Overview
 

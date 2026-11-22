@@ -1,0 +1,110 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - jq
+  - fail2ban
+  - ufw
+  - wireguard-tools
+  - docker.io
+  - docker-compose-v2
+
+write_files:
+  - path: /etc/docker/daemon.json
+    owner: root:root
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "50m",
+          "max-file": "3"
+        }
+      }
+
+  - path: /etc/fail2ban/jail.local
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 5
+      bantime = 1h
+
+  - path: /usr/local/bin/aq-setup-storage.sh
+    owner: root:root
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      # Find attached Hetzner volume
+      VOLUME_DEV=$(ls -1 /dev/disk/by-id/scsi-0HC_Volume_* 2>/dev/null | head -n1 || true)
+      if [ -z "$VOLUME_DEV" ]; then
+        echo "Warning: No Hetzner block volume found yet. Retrying in 5s..."
+        sleep 5
+        VOLUME_DEV=$(ls -1 /dev/disk/by-id/scsi-0HC_Volume_* 2>/dev/null | head -n1 || true)
+      fi
+
+      if [ -n "$VOLUME_DEV" ]; then
+        echo "Found block volume at $VOLUME_DEV"
+        if ! blkid "$VOLUME_DEV" >/dev/null 2>&1; then
+          echo "Formatting $VOLUME_DEV with ext4..."
+          mkfs.ext4 -F -m 1 "$VOLUME_DEV"
+        fi
+
+        mkdir -p /mnt/data
+        UUID=$(blkid -s UUID -o value "$VOLUME_DEV")
+        if ! grep -q "$UUID" /etc/fstab; then
+          echo "UUID=$UUID /mnt/data ext4 defaults,nofail,noatime 0 2" >> /etc/fstab
+        fi
+
+        if ! mountpoint -q /mnt/data; then
+          mount /mnt/data
+        fi
+      else
+        echo "No block volume detected. Fallback creating /mnt/data on root partition..."
+        mkdir -p /mnt/data
+      fi
+
+      # Establish required application and backup directory structures on persistent storage
+      mkdir -p /mnt/data/postgres
+      mkdir -p /mnt/data/timescale
+      mkdir -p /mnt/data/redis
+      mkdir -p /mnt/data/mosquitto
+      mkdir -p /mnt/data/chirpstack
+      mkdir -p /mnt/data/caddy/data
+      mkdir -p /mnt/data/caddy/config
+      mkdir -p /mnt/data/backups/logical
+      mkdir -p /mnt/data/backups/physical
+      mkdir -p /mnt/data/alloy
+
+      # Secure configuration directory for production secrets
+      mkdir -p /etc/aq
+      chmod 0700 /etc/aq
+
+      # Set permissions for Postgres/Timescale and Mosquitto uid/gid
+      chmod 0700 /mnt/data/postgres /mnt/data/timescale /mnt/data/backups/logical /mnt/data/backups/physical
+      chown -R 999:999 /mnt/data/redis || true
+      chown -R 1883:1883 /mnt/data/mosquitto || true
+
+runcmd:
+  - systemctl restart fail2ban
+  - systemctl enable docker
+  - systemctl start docker
+  - /usr/local/bin/aq-setup-storage.sh
+  # Install and configure Tailscale for secure, private deployment access from CI/CD
+  - curl -fsSL https://tailscale.com/install.sh | sh
+%{ if tailscale_auth_key != "" ~}
+  - tailscale up --authkey=${tailscale_auth_key} --hostname=aq-${environment}-host --ssh
+%{ endif ~}

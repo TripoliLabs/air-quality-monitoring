@@ -1,0 +1,303 @@
+# =============================================================================
+# Air Quality Monitoring — Production Stack (Hetzner Cloud)
+# =============================================================================
+#
+# Production compose orchestration: All application containers use immutable,
+# pre-built images from GHCR tagged with ${IMAGE_SHA}. No compilation or builds
+# occur on the production host.
+#
+# Single-host deployment boundary:
+# Provides Disaster Recovery (DR) via automated off-site backups and OpenTofu IaC.
+# Does NOT provide multi-node High Availability (HA).
+#
+# Internal Networking:
+# Databases (Postgres, TimescaleDB), Redis, MQTT, Ingestion, API, and Dashboard
+# are strictly internal to the `aq_net` Docker network. NO internal ports are
+# exposed or published to the host.
+# Public ingress is exclusively handled by Caddy (:80/:443) and ChirpStack Gateway
+# Bridge (:1700/udp).
+# =============================================================================
+
+name: airquality-prod
+
+services:
+  # ===========================================================================
+  # Public Edge Reverse Proxy
+  # ===========================================================================
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: aq-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-aq.tripolilabs.org}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@tripolilabs.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /mnt/data/caddy/data:/data
+      - /mnt/data/caddy/config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      dashboard:
+        condition: service_healthy
+    networks:
+      - aq_net
+
+  # ===========================================================================
+  # Core Data Stores (Zero published ports to host)
+  # ===========================================================================
+  postgres:
+    image: postgres:18-alpine
+    container_name: aq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${APP_DB_USERNAME:-airquality}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+      POSTGRES_DB: ${APP_DB_NAME:-airquality}
+    volumes:
+      - /mnt/data/postgres:/var/lib/postgresql/data
+      - ../local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USERNAME:-airquality} -d ${APP_DB_NAME:-airquality}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aq_net
+
+  timescaledb:
+    image: timescale/timescaledb:2.30.2-pg18
+    container_name: aq-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TSDB_USERNAME:-airquality}
+      POSTGRES_PASSWORD: ${TSDB_PASSWORD}
+      POSTGRES_DB: ${TSDB_NAME:-telemetry}
+    volumes:
+      - /mnt/data/timescale:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TSDB_USERNAME:-airquality} -d ${TSDB_NAME:-telemetry}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aq_net
+
+  redis:
+    image: redis:8-alpine
+    container_name: aq-redis
+    restart: unless-stopped
+    command: sh -c 'redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - /mnt/data/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aq_net
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: aq-mqtt
+    restart: unless-stopped
+    volumes:
+      - /mnt/data/mosquitto:/mosquitto/data
+      - /etc/aq/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - /etc/aq/mosquitto.passwd:/mosquitto/config/mosquitto.passwd:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/version' -C 1 -u chirpstack -P '${MQTT_CHIRPSTACK_PASSWORD}' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aq_net
+
+  # ===========================================================================
+  # LoRaWAN Network Server & Gateway Bridge
+  # ===========================================================================
+  chirpstack:
+    image: chirpstack/chirpstack:4
+    container_name: aq-chirpstack
+    restart: unless-stopped
+    command: -c /etc/chirpstack
+    volumes:
+      - /etc/aq/chirpstack:/etc/chirpstack:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt:
+        condition: service_healthy
+    networks:
+      - aq_net
+
+  chirpstack-gateway-bridge:
+    image: chirpstack/chirpstack-gateway-bridge:4
+    container_name: aq-gateway-bridge
+    restart: unless-stopped
+    ports:
+      # Semtech UDP packet forwarder listener: explicit port allowance on firewall
+      - "1700:1700/udp"
+    environment:
+      INTEGRATION__MARSHALER: json
+      INTEGRATION__MQTT__AUTH__GENERIC__SERVERS: tcp://mqtt:1883
+      INTEGRATION__MQTT__AUTH__GENERIC__USERNAME: gateway_bridge
+      INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD: ${MQTT_GATEWAY_BRIDGE_PASSWORD}
+      INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}"
+      INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}"
+      INTEGRATION__MQTT__COMMAND_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/command/#"
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    networks:
+      - aq_net
+
+  # ===========================================================================
+  # Database Migrations (One-shot, executes to completion before apps start)
+  # ===========================================================================
+  migrate:
+    image: ghcr.io/tripolilabs/air-quality-migrate:${IMAGE_SHA}
+    container_name: aq-migrate
+    restart: "no"
+    environment:
+      APP_DB_URL: postgres://${APP_DB_USERNAME:-airquality}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-airquality}
+      TSDB_URL: postgres://${TSDB_USERNAME:-airquality}:${TSDB_PASSWORD}@timescaledb:5432/${TSDB_NAME:-telemetry}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - aq_net
+
+  # ===========================================================================
+  # Application Services (Immutable pre-built images from GHCR)
+  # ===========================================================================
+  api:
+    image: ghcr.io/tripolilabs/air-quality-api:${IMAGE_SHA}
+    container_name: aq-api
+    restart: unless-stopped
+    env_file:
+      - path: ${ENV_FILE:-/etc/aq/app.env}
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${APP_DB_USERNAME:-airquality}
+      DB_PASSWORD: ${APP_DB_PASSWORD}
+      DB_NAME: ${APP_DB_NAME:-airquality}
+      TSDB_HOST: timescaledb
+      TSDB_PORT: 5432
+      TSDB_USERNAME: ${TSDB_USERNAME:-airquality}
+      TSDB_PASSWORD: ${TSDB_PASSWORD}
+      TSDB_NAME: ${TSDB_NAME:-telemetry}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      MQTT_URL: mqtt://api:${MQTT_API_PASSWORD}@mqtt:1883
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      CORS_ORIGIN: https://${DOMAIN:-aq.tripolilabs.org}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt:
+        condition: service_healthy
+    networks:
+      - aq_net
+
+  ingestion:
+    image: ghcr.io/tripolilabs/air-quality-ingestion:${IMAGE_SHA}
+    container_name: aq-ingestion
+    restart: unless-stopped
+    env_file:
+      - path: ${ENV_FILE:-/etc/aq/app.env}
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      TSDB_HOST: timescaledb
+      TSDB_PORT: 5432
+      TSDB_USERNAME: ${TSDB_USERNAME:-airquality}
+      TSDB_PASSWORD: ${TSDB_PASSWORD}
+      TSDB_NAME: ${TSDB_NAME:-telemetry}
+      MQTT_URL: mqtt://ingestion:${MQTT_INGESTION_PASSWORD}@mqtt:1883
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt:
+        condition: service_healthy
+    networks:
+      - aq_net
+
+  dashboard:
+    image: ghcr.io/tripolilabs/air-quality-dashboard:${IMAGE_SHA}
+    container_name: aq-dashboard
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aq_net
+
+  # ===========================================================================
+  # Observability (Grafana Alloy forwarder to Grafana Cloud)
+  # ===========================================================================
+  alloy:
+    image: grafana/alloy:latest
+    container_name: aq-alloy
+    restart: unless-stopped
+    user: root
+    command:
+      - "run"
+      - "/etc/alloy/config.cloud.alloy"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+    env_file:
+      - path: ${ENV_FILE:-/etc/aq/app.env}
+        required: false
+    volumes:
+      - ../observability/alloy/config.cloud.alloy:/etc/alloy/config.cloud.alloy:ro
+      - /mnt/data/alloy:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - aq_net
+
+networks:
+  aq_net:
+    driver: bridge

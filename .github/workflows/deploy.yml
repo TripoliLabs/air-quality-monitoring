@@ -1,0 +1,175 @@
+name: CD - Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Target environment to deploy"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+          - both
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/air-quality
+
+jobs:
+  # ===========================================================================
+  # 1. Build immutable container images once and push to GHCR
+  # ===========================================================================
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image_sha: ${{ steps.vars.outputs.sha_short }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Calculate image tag
+        id: vars
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build and push API
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-api:${{ steps.vars.outputs.sha_short }}
+            ${{ env.IMAGE_PREFIX }}-api:latest
+
+      # Build and push Ingestion
+      - name: Build and push Ingestion image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/ingestion/Dockerfile
+          target: prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-ingestion:${{ steps.vars.outputs.sha_short }}
+            ${{ env.IMAGE_PREFIX }}-ingestion:latest
+
+      # Build and push Web Dashboard
+      - name: Build and push Dashboard image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/dashboard/Dockerfile
+          target: prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-dashboard:${{ steps.vars.outputs.sha_short }}
+            ${{ env.IMAGE_PREFIX }}-dashboard:latest
+
+      # Build and push Migration runner
+      - name: Build and push Migrate image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/db/Dockerfile
+          target: runner
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-migrate:${{ steps.vars.outputs.sha_short }}
+            ${{ env.IMAGE_PREFIX }}-migrate:latest
+
+  # ===========================================================================
+  # 2. Deploy to Staging over private Tailscale tunnel
+  # ===========================================================================
+  deploy-staging:
+    needs: [build-and-push]
+    if: github.event_name == 'push' || inputs.target_environment == 'staging' || inputs.target_environment == 'both'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.aq.tripolilabs.org
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Connect to Tailnet
+        uses: tailscale/github-action@v3
+        if: env.TAILSCALE_AUTHKEY != ''
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo -e "Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile=/dev/null\n" > ~/.ssh/config
+
+      - name: Deploy to Staging Host
+        env:
+          HOST: ${{ secrets.STAGING_HOST || 'aq-staging-host' }}
+          IMAGE_SHA: ${{ needs.build-and-push.outputs.image_sha }}
+        run: |
+          echo "Deploying image SHA ${IMAGE_SHA} to staging..."
+          scp -r deploy/compose deploy/mqtt deploy/scripts root@${HOST}:/opt/aq/deploy/
+          ssh root@${HOST} "chmod +x /opt/aq/deploy/scripts/*.sh && /opt/aq/deploy/scripts/deploy.sh ${IMAGE_SHA} /opt/aq/deploy/compose"
+
+  # ===========================================================================
+  # 3. Deploy to Production with Approval Gate (Deploy same immutable image SHA)
+  # ===========================================================================
+  deploy-production:
+    needs: [build-and-push, deploy-staging]
+    if: github.event_name == 'push' || inputs.target_environment == 'production' || inputs.target_environment == 'both'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://aq.tripolilabs.org
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Connect to Tailnet
+        uses: tailscale/github-action@v3
+        if: env.TAILSCALE_AUTHKEY != ''
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo -e "Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile=/dev/null\n" > ~/.ssh/config
+
+      - name: Deploy to Production Host
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST || 'aq-production-host' }}
+          IMAGE_SHA: ${{ needs.build-and-push.outputs.image_sha }}
+        run: |
+          echo "Deploying VERIFIED image SHA ${IMAGE_SHA} to production..."
+          scp -r deploy/compose deploy/mqtt deploy/scripts root@${HOST}:/opt/aq/deploy/
+          ssh root@${HOST} "chmod +x /opt/aq/deploy/scripts/*.sh && /opt/aq/deploy/scripts/deploy.sh ${IMAGE_SHA} /opt/aq/deploy/compose"
