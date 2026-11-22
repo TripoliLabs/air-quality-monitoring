@@ -21,6 +21,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aq/telemetry-codec": "workspace:*",
     "@aq/domain": "workspace:*",
     "zod": "^4.6.5"
   },

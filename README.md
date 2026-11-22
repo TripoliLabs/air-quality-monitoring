@@ -504,6 +504,7 @@ We chose AGPL to ensure this project **remains open source forever**. We built t
 - [Contributing](CONTRIBUTING.md) — dev setup, coding standards, workflow
 - [Frontend Production Readiness](docs/frontend-production-readiness.md) — dashboard hardening backlog
 - [ChirpStack / Gateway setup](edge/chirpstack/README.md) — LoRaWAN network server
+- [Remote node configuration](docs/remote-node-configuration.md) — API, dispatch recovery, and delivery limitations
 - [Infrastructure](infra/README.md) · [Deployment](deploy/README.md) — provisioning + runtime composition
 - [Hardware BOM](hardware/bom/) — bill of materials
 

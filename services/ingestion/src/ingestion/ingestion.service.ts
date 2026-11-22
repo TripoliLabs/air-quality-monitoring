@@ -1,9 +1,16 @@
 import {
   ChirpStackUplinkSchema,
   type ReadingCreatedEvent,
+  ReportedConfigurationSchema,
   SensorReadingSchema,
 } from '@aq/contracts';
-import { createTelemetryDb, readings, type TelemetryDb } from '@aq/db';
+import {
+  ConfigurationStore,
+  configurationPolicy,
+  createTelemetryDb,
+  readings,
+  type TelemetryDb,
+} from '@aq/db';
 import { calculateAqi } from '@aq/domain';
 import { createCounter, createLogger } from '@aq/observability';
 import {
@@ -16,6 +23,8 @@ import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/com
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { connect, type MqttClient } from 'mqtt';
+import { configurationRoute } from './configuration-routing';
+import { ConfigurationWorker, routingKey } from './configuration-worker';
 
 const UPLINK_TOPIC = 'application/+/device/+/event/up';
 const READINGS_CHANNEL = 'readings'; // Redis Pub/Sub channel for realtime fan-out
@@ -23,7 +32,6 @@ const LATEST_KEY = (deviceId: string): string => `sensor:latest:${deviceId}`;
 const DATA_FPORT = 2; // telemetry uplinks (config downlinks use fPort 10)
 // The settings each node last reported (fPort 11). No TTL: it stays true until
 // the node reports again.
-const CONFIG_KEY = (deviceId: string): string => `sensor:config:${deviceId}`;
 const RESULT_NAMES: Record<ConfigResult, string> = {
   [ConfigResult.None]: 'none',
   [ConfigResult.Applied]: 'applied',
@@ -48,6 +56,8 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
   private readonly db: TelemetryDb;
   private readonly redis: Redis;
   private client?: MqttClient;
+  private readonly configuration: ConfigurationStore;
+  private worker?: ConfigurationWorker;
 
   constructor(private readonly config: ConfigService) {
     this.db = createTelemetryDb(this.telemetryUrl());
@@ -56,6 +66,7 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       maxRetriesPerRequest: null,
       commandTimeout: 10_000, // fail a command rather than hang forever on a Redis outage
     });
+    this.configuration = new ConfigurationStore(this.redis, configurationPolicy(process.env));
   }
 
   onModuleInit(): void {
@@ -83,10 +94,18 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
     this.client.on('message', (topic, payload) => {
       void this.handleUplink(topic, payload);
     });
+    this.worker = new ConfigurationWorker(
+      this.redis,
+      this.configuration,
+      (downTopic, payload) => this.publishDownlink(downTopic, payload),
+      this.config.get<string>('CHIRPSTACK_APPLICATION_ID'),
+    );
+    this.worker.start();
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.client?.endAsync();
+    await this.worker?.stop();
+    await this.client?.endAsync(true);
     this.redis.disconnect();
   }
 
@@ -94,9 +113,12 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
     try {
       // 1) Parse + validate the ChirpStack application-uplink envelope.
       const uplink = ChirpStackUplinkSchema.parse(JSON.parse(raw.toString('utf8')));
-      const deviceId = uplink.deviceInfo.devEui;
+      const { deviceId, applicationId } = configurationRoute(topic, uplink);
 
       if (uplink.fPort === CONFIG_REPORT_FPORT) {
+        // Decode first: malformed application payloads must not establish routing.
+        decodeConfigReport(new Uint8Array(Buffer.from(uplink.data, 'base64')));
+        await this.redis.set(routingKey(deviceId), applicationId);
         await this.handleConfigReport(deviceId, uplink.data, uplink.time);
         return;
       }
@@ -111,6 +133,7 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       // 2) Decode the base64 frmPayload with the shared codec (same layout as firmware).
       const bytes = new Uint8Array(Buffer.from(uplink.data, 'base64'));
       const decoded = decodeUplink(bytes);
+      await this.redis.set(routingKey(deviceId), applicationId);
 
       // A node with a dead sensor clears its presence bit and zero-fills the field.
       // Until per-field nullable persistence lands, persisting pm25=0 as a real
@@ -201,8 +224,10 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
    * a cold boot), so the server can confirm a change took effect. */
   private async handleConfigReport(deviceId: string, data: string, time?: string): Promise<void> {
     const report = decodeConfigReport(new Uint8Array(Buffer.from(data, 'base64')));
-    const reportedAt = time && !Number.isNaN(Date.parse(time)) ? new Date(time) : new Date();
-    const config = {
+    const now = Date.now();
+    const trustedTime = Boolean(time && !Number.isNaN(Date.parse(time)) && Date.parse(time) <= now);
+    const reportedAt = trustedTime && time ? new Date(time) : new Date(now);
+    const config = ReportedConfigurationSchema.parse({
       deviceId,
       intervalS: report.intervalS,
       pmOffset: report.pmOffsetX10 / 10,
@@ -210,9 +235,29 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
       lastCommand: report.lastCommand,
       lastResult: RESULT_NAMES[report.lastResult],
       reportedAt: reportedAt.toISOString(),
-    };
-    await this.redis.set(CONFIG_KEY(deviceId), JSON.stringify(config));
+    });
+    await this.configuration.report(config, trustedTime);
     this.log.info('config report', config);
+  }
+
+  private async publishDownlink(topic: string, payload: string): Promise<void> {
+    const client = this.client;
+    if (!client?.connected) throw new Error('MQTT broker is disconnected');
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('MQTT acknowledgement timed out; delivery is uncertain')),
+          10_000,
+        );
+        client.publish(topic, payload, { qos: 1, retain: false }, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private telemetryUrl(): string {

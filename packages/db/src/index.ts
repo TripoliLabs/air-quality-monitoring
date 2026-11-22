@@ -1,3 +1,4 @@
+export * from './configuration';
 export * from './fixtures';
 export * from './relational/client';
 export * from './relational/schema';

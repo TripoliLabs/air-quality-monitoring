@@ -34,7 +34,8 @@ describe('API integration', () => {
     expect(res.status).toBe(200);
     const sensors = (await res.json()) as Array<Record<string, unknown>>;
     expect(sensors.length).toBeGreaterThanOrEqual(6);
-    expect(sensors[0]).toMatchObject({
+    // Registry row order is unspecified and integration suites create additional devices.
+    expect(sensors.find((sensor) => sensor.deviceId === '70b3d57ed0060001')).toMatchObject({
       deviceId: expect.any(String),
       name: expect.any(String),
       neighborhood: expect.any(String),
