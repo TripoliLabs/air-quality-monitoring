@@ -1,103 +1,89 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Automated Production Deployment Script with Health Gate & Rollback
-# =============================================================================
-# Usage:
-#   ./deploy.sh <IMAGE_SHA> [COMPOSE_DIR]
-# =============================================================================
-
+# Usage: GHCR_USER=user deploy.sh <full-commit-sha> [compose-dir]
+# Optional GHCR token on stdin; no token is needed for public images.
 set -euo pipefail
-
-IMAGE_SHA="${1:?Error: IMAGE_SHA must be provided as first argument}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_DIR="${2:-$(cd "${SCRIPT_DIR}/../compose" && pwd)}"
-COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.prod.yml"
-STATE_FILE="/etc/aq/current_image_sha"
-MAX_HEALTH_ATTEMPTS=30
-HEALTH_INTERVAL_SEC=3
-
-echo "=== Starting Deployment for Image SHA: ${IMAGE_SHA} ==="
-
-if [ ! -f "${COMPOSE_FILE}" ]; then
-  echo "Error: Compose file not found at ${COMPOSE_FILE}" >&2
+umask 077
+IMAGE_SHA="${1:?Usage: deploy.sh <full-commit-sha> [compose-dir]}"
+[[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected a full lowercase commit SHA.' >&2; exit 1; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+COMPOSE_DIR="${2:-$SCRIPT_DIR/../compose}"
+# Resolve the current-release symlink before replacing it on success.
+COMPOSE_DIR="$(cd "$COMPOSE_DIR" && pwd -P)"
+AQ_ROOT="${AQ_ROOT:-/opt/aq}"
+ENV_FILE="$AQ_ROOT/.env"
+STATE_FILE="$AQ_ROOT/current_image_sha"
+MAX_HEALTH_ATTEMPTS="${MAX_HEALTH_ATTEMPTS:-30}"
+HEALTH_INTERVAL_SEC="${HEALTH_INTERVAL_SEC:-3}"
+export IMAGE_SHA ENV_FILE
+test -r "$ENV_FILE"
+if [[ -e "$AQ_ROOT/deploy" && ! -L "$AQ_ROOT/deploy" ]]; then
+  echo "$AQ_ROOT/deploy must be a symlink to retained release assets; see the runbook." >&2
   exit 1
 fi
-
-PREVIOUS_IMAGE_SHA=""
-if [ -f "${STATE_FILE}" ]; then
-  PREVIOUS_IMAGE_SHA=$(cat "${STATE_FILE}" || true)
+exec 9>"$AQ_ROOT/deploy.lock"
+flock -n 9 || { echo 'Another deployment is running.' >&2; exit 1; }
+export DOCKER_CONFIG
+DOCKER_CONFIG=$(mktemp -d)
+trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
+if [[ -n "${GHCR_USER:-}" ]]; then
+  docker login ghcr.io --username "$GHCR_USER" --password-stdin
 fi
-
-export IMAGE_SHA
-
-rollback() {
-  echo "::error::Deployment health gate failed! Initiating rollback..."
-  if [ -n "${PREVIOUS_IMAGE_SHA}" ] && [ "${PREVIOUS_IMAGE_SHA}" != "${IMAGE_SHA}" ]; then
-    echo "Rolling back to previous stable image: ${PREVIOUS_IMAGE_SHA}"
-    export IMAGE_SHA="${PREVIOUS_IMAGE_SHA}"
-    docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
-    echo "Rollback to ${PREVIOUS_IMAGE_SHA} executed."
-  else
-    echo "No previous stable image recorded. Halting services in current state for inspection."
-  fi
-  docker compose -f "${COMPOSE_FILE}" logs --tail 100
-  exit 1
+compose() {
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_DIR/docker-compose.prod.yml" "$@"
 }
-
-trap rollback ERR
-
-echo "1. Pulling immutable pre-built images from GHCR..."
-docker compose -f "${COMPOSE_FILE}" pull
-
-echo "2. Running database migrations..."
-# Run one-shot migrate service
-docker compose -f "${COMPOSE_FILE}" run --rm migrate
-
-echo "3. Starting updated application stack..."
-docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
-
-echo "4. Executing Deployment Health Gate..."
-
-wait_for_service() {
-  local service_name="$1"
-  local check_cmd="$2"
-  echo "Checking ${service_name}..."
-  for i in $(seq 1 "${MAX_HEALTH_ATTEMPTS}"); do
-    if eval "${check_cmd}" >/dev/null 2>&1; then
-      echo "  [OK] ${service_name} passed health check (attempt ${i})"
-      return 0
-    fi
-    sleep "${HEALTH_INTERVAL_SEC}"
+wait_for_apps() {
+  local attempt service container healthy
+  for ((attempt=1; attempt<=MAX_HEALTH_ATTEMPTS; attempt++)); do
+    healthy=true
+    for service in api ingestion dashboard; do
+      container=$(compose ps -q "$service") || return 1
+      if [[ -z "$container" ]] || [[ $(docker inspect --format '{{.State.Health.Status}}' "$container" 2>/dev/null) != healthy ]]; then
+        healthy=false
+      fi
+    done
+    if [[ "$healthy" == true ]]; then return 0; fi
+    sleep "$HEALTH_INTERVAL_SEC"
   done
-  echo "  [FAIL] ${service_name} failed health check after ${MAX_HEALTH_ATTEMPTS} attempts"
   return 1
 }
-
-# Gate Checks
-wait_for_service "PostgreSQL Database" \
-  "docker exec aq-postgres pg_isready -U airquality -d airquality"
-
-wait_for_service "TimescaleDB Telemetry Database" \
-  "docker exec aq-timescaledb pg_isready -U airquality -d telemetry"
-
-wait_for_service "Redis Cache/PubSub" \
-  "docker exec aq-redis sh -c 'redis-cli -a \"\${REDIS_PASSWORD}\" ping | grep -q PONG'"
-
-wait_for_service "Mosquitto Broker" \
-  "docker exec aq-mqtt mosquitto_sub -t '\$SYS/broker/version' -C 1 -u chirpstack -P \"\${MQTT_CHIRPSTACK_PASSWORD}\""
-
-wait_for_service "REST & WebSocket API (/health)" \
-  "docker exec aq-api wget -qO- http://localhost:3000/health"
-
-wait_for_service "Ingestion Pipeline (/health)" \
-  "docker exec aq-ingestion wget -qO- http://localhost:3001/health"
-
-wait_for_service "Web SPA Dashboard (/healthz)" \
-  "docker exec aq-dashboard curl -fsS http://localhost/healthz"
-
-echo "Disabling rollback trap..."
-trap - ERR
-
-# Record current successful deployment SHA
-echo "${IMAGE_SHA}" > "${STATE_FILE}"
-echo "=== Deployment for ${IMAGE_SHA} verified successfully! ==="
+previous_sha=''
+if [[ -f "$STATE_FILE" ]]; then
+  previous_sha=$(cat "$STATE_FILE")
+  [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid saved deployment SHA.' >&2; exit 1; }
+fi
+# Fail before touching applications if stores, images, configuration or migrations fail.
+compose config --quiet
+for service in postgres timescaledb redis mqtt chirpstack; do
+  test -n "$(compose ps --status running -q "$service")" || {
+    echo "Backing service $service is not running; follow the initial setup runbook." >&2
+    exit 1
+  }
+done
+compose pull api ingestion dashboard migrate
+compose run --rm --no-deps migrate
+if compose up -d --no-deps api ingestion dashboard && wait_for_apps; then
+  printf '%s\n' "$IMAGE_SHA" > "$STATE_FILE.tmp"
+  mv -f "$STATE_FILE.tmp" "$STATE_FILE"
+  printf '%s\n' "$COMPOSE_DIR" > "$AQ_ROOT/current_compose_dir.tmp"
+  mv -f "$AQ_ROOT/current_compose_dir.tmp" "$AQ_ROOT/current_compose_dir"
+  ln -sfn "$(dirname "$COMPOSE_DIR")" "$AQ_ROOT/deploy.next"
+  mv -Tf "$AQ_ROOT/deploy.next" "$AQ_ROOT/deploy"
+  echo "Deployment $IMAGE_SHA is healthy."
+else
+  echo 'Application deployment failed.' >&2
+  compose logs --tail 100 api ingestion dashboard || true
+  if [[ -n "$previous_sha" && "$previous_sha" != "$IMAGE_SHA" ]]; then
+    export IMAGE_SHA="$previous_sha"
+    if [[ -f "$AQ_ROOT/current_compose_dir" ]]; then
+      COMPOSE_DIR=$(cat "$AQ_ROOT/current_compose_dir")
+    fi
+    if compose pull api ingestion dashboard && compose up -d --no-deps api ingestion dashboard && wait_for_apps; then
+      echo "Rolled back applications to $previous_sha; database migrations were not reversed." >&2
+    else
+      echo 'ROLLBACK FAILED: operator intervention required.' >&2
+    fi
+  else
+    echo 'No different successful release exists; leaving containers for inspection.' >&2
+  fi
+  exit 1
+fi

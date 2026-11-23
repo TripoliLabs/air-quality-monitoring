@@ -2,7 +2,7 @@
 
 OpenTelemetry from the services, collected by **Grafana Alloy**, into an
 LGTM-style backend — the self-hosted stack locally, and **Grafana Cloud** on
-staging/prod. The application code and the Alloy pipelines are identical across
+production. The application code and the Alloy pipelines are identical across
 environments; only Alloy's *exporters* change.
 
 ```
@@ -33,7 +33,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318 docker compose --profile observabi
 Files: `alloy/config.alloy` (local collector), `prometheus.yml`, `tempo.yml`,
 `provisioning/` (Grafana datasources + dashboards + alerting).
 
-## Grafana Cloud (staging / prod)
+## Grafana Cloud (production)
 
 Same services, same Alloy pipelines — swap the mounted config and provide the
 Cloud credentials. No self-hosted Grafana/Prometheus/Loki/Tempo needed; you view
@@ -43,7 +43,7 @@ everything in your Grafana Cloud stack.
    the local one.
 2. Set the `GRAFANA_CLOUD_*` environment variables (from your Cloud stack's
    "Connections → Add data / OTLP / Prometheus / Loki" pages). These are managed
-   as GitHub Environment secrets — see the tracking issue and the list below.
+   in `/opt/aq/.env` on the production host, not GitHub — see the list below.
 
 | Variable | What it is |
 |---|---|

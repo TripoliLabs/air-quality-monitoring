@@ -1,0 +1,26 @@
+[logging]
+level = "info"
+[postgresql]
+dsn = "postgres://$APP_DB_USERNAME:$APP_DB_PASSWORD@postgres/$APP_DB_NAME?sslmode=disable"
+max_open_connections = 10
+min_idle_connections = 0
+[redis]
+servers = ["redis://:$REDIS_PASSWORD@redis:6379/"]
+[network]
+net_id = "000000"
+enabled_regions = ["eu868"]
+[api]
+bind = "0.0.0.0:8080"
+secret = "$CHIRPSTACK_API_SECRET"
+[integration]
+enabled = ["mqtt"]
+  [integration.mqtt]
+  event_topic = "application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
+  command_topic = "application/{{application_id}}/device/{{dev_eui}}/command/{{command}}"
+  json = true
+  server = "tcp://mqtt:1883"
+  username = "chirpstack"
+  password = "$MQTT_CHIRPSTACK_PASSWORD"
+  qos = 1
+  clean_session = false
+  client_id = "aq-chirpstack-integration"

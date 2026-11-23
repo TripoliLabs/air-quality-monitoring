@@ -1,13 +1,13 @@
 # =============================================================================
-# Air Quality Monitoring — Production Stack (Hetzner Cloud)
+# Air Quality Monitoring — Production Stack (Netcup)
 # =============================================================================
 #
 # Production compose orchestration: All application containers use immutable,
-# pre-built images from GHCR tagged with ${IMAGE_SHA}. No compilation or builds
+# pre-built images from GHCR tagged with ${IMAGE_SHA:?Set IMAGE_SHA to a published full commit SHA}. No compilation or builds
 # occur on the production host.
 #
 # Single-host deployment boundary:
-# Provides Disaster Recovery (DR) via automated off-site backups and OpenTofu IaC.
+# Provides Disaster Recovery (DR) via nightly off-site logical backups and a repeatable bootstrap.
 # Does NOT provide multi-node High Availability (HA).
 #
 # Internal Networking:
@@ -55,10 +55,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${APP_DB_USERNAME:-airquality}
-      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?Required}
       POSTGRES_DB: ${APP_DB_NAME:-airquality}
     volumes:
-      - /mnt/data/postgres:/var/lib/postgresql/data
+      - /mnt/data/postgres:/var/lib/postgresql
       - ../local/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USERNAME:-airquality} -d ${APP_DB_NAME:-airquality}"]
@@ -74,10 +74,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${TSDB_USERNAME:-airquality}
-      POSTGRES_PASSWORD: ${TSDB_PASSWORD}
+      POSTGRES_PASSWORD: ${TSDB_PASSWORD:?Required}
       POSTGRES_DB: ${TSDB_NAME:-telemetry}
     volumes:
-      - /mnt/data/timescale:/var/lib/postgresql/data
+      - /mnt/data/timescale:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${TSDB_USERNAME:-airquality} -d ${TSDB_NAME:-telemetry}"]
       interval: 10s
@@ -90,13 +90,13 @@ services:
     image: redis:8-alpine
     container_name: aq-redis
     restart: unless-stopped
-    command: sh -c 'redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"'
+    command: sh -c 'redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD:?Required}"'
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Required}
     volumes:
       - /mnt/data/redis:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD:?Required}\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -109,10 +109,13 @@ services:
     restart: unless-stopped
     volumes:
       - /mnt/data/mosquitto:/mosquitto/data
-      - /etc/aq/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - /etc/aq/mosquitto.passwd:/mosquitto/config/mosquitto.passwd:ro
+      - ../mqtt/mosquitto.prod.conf:/mosquitto/config/mosquitto.conf:ro
+      - /opt/aq/generated/mqtt/mosquitto.passwd:/mosquitto/config/mosquitto.passwd:ro
+      - ../mqtt/acl:/mosquitto/config/acl:ro
+    environment:
+      MQTT_CHIRPSTACK_PASSWORD: ${MQTT_CHIRPSTACK_PASSWORD:?Required}
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/version' -C 1 -u chirpstack -P '${MQTT_CHIRPSTACK_PASSWORD}' || exit 1"]
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/version' -C 1 -u chirpstack -P \"$${MQTT_CHIRPSTACK_PASSWORD}\" -W 3 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -127,8 +130,15 @@ services:
     container_name: aq-chirpstack
     restart: unless-stopped
     command: -c /etc/chirpstack
+    environment:
+      APP_DB_USERNAME: ${APP_DB_USERNAME:-airquality}
+      APP_DB_NAME: ${APP_DB_NAME:-airquality}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Required}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Required}
+      MQTT_CHIRPSTACK_PASSWORD: ${MQTT_CHIRPSTACK_PASSWORD:?Required}
+      CHIRPSTACK_API_SECRET: ${CHIRPSTACK_API_SECRET:?Required}
     volumes:
-      - /etc/aq/chirpstack:/etc/chirpstack:ro
+      - ../chirpstack:/etc/chirpstack:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,7 +160,7 @@ services:
       INTEGRATION__MARSHALER: json
       INTEGRATION__MQTT__AUTH__GENERIC__SERVERS: tcp://mqtt:1883
       INTEGRATION__MQTT__AUTH__GENERIC__USERNAME: gateway_bridge
-      INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD: ${MQTT_GATEWAY_BRIDGE_PASSWORD}
+      INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD: ${MQTT_GATEWAY_BRIDGE_PASSWORD:?Required}
       INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}"
       INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}"
       INTEGRATION__MQTT__COMMAND_TOPIC_TEMPLATE: "eu868/gateway/{{ .GatewayID }}/command/#"
@@ -164,12 +174,12 @@ services:
   # Database Migrations (One-shot, executes to completion before apps start)
   # ===========================================================================
   migrate:
-    image: ghcr.io/tripolilabs/air-quality-migrate:${IMAGE_SHA}
+    image: ${IMAGE_PREFIX:-ghcr.io/tripolilabs/air-quality}-migrate:${IMAGE_SHA:?Set IMAGE_SHA to a published full commit SHA}
     container_name: aq-migrate
     restart: "no"
     environment:
-      APP_DB_URL: postgres://${APP_DB_USERNAME:-airquality}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-airquality}
-      TSDB_URL: postgres://${TSDB_USERNAME:-airquality}:${TSDB_PASSWORD}@timescaledb:5432/${TSDB_NAME:-telemetry}
+      APP_DB_URL: postgres://${APP_DB_USERNAME:-airquality}:${APP_DB_PASSWORD:?Required}@postgres:5432/${APP_DB_NAME:-airquality}
+      TSDB_URL: postgres://${TSDB_USERNAME:-airquality}:${TSDB_PASSWORD:?Required}@timescaledb:5432/${TSDB_NAME:-telemetry}
     depends_on:
       postgres:
         condition: service_healthy
@@ -182,28 +192,24 @@ services:
   # Application Services (Immutable pre-built images from GHCR)
   # ===========================================================================
   api:
-    image: ghcr.io/tripolilabs/air-quality-api:${IMAGE_SHA}
+    image: ${IMAGE_PREFIX:-ghcr.io/tripolilabs/air-quality}-api:${IMAGE_SHA:?Set IMAGE_SHA to a published full commit SHA}
     container_name: aq-api
     restart: unless-stopped
-    env_file:
-      - path: ${ENV_FILE:-/etc/aq/app.env}
-        required: false
     environment:
       NODE_ENV: production
       PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: ${APP_DB_USERNAME:-airquality}
-      DB_PASSWORD: ${APP_DB_PASSWORD}
+      DB_PASSWORD: ${APP_DB_PASSWORD:?Required}
       DB_NAME: ${APP_DB_NAME:-airquality}
       TSDB_HOST: timescaledb
       TSDB_PORT: 5432
       TSDB_USERNAME: ${TSDB_USERNAME:-airquality}
-      TSDB_PASSWORD: ${TSDB_PASSWORD}
+      TSDB_PASSWORD: ${TSDB_PASSWORD:?Required}
       TSDB_NAME: ${TSDB_NAME:-telemetry}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      MQTT_URL: mqtt://api:${MQTT_API_PASSWORD}@mqtt:1883
-      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Required}@redis:6379
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?Required}
       CORS_ORIGIN: https://${DOMAIN:-aq.tripolilabs.org}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
     healthcheck:
@@ -219,28 +225,24 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mqtt:
-        condition: service_healthy
     networks:
       - aq_net
 
   ingestion:
-    image: ghcr.io/tripolilabs/air-quality-ingestion:${IMAGE_SHA}
+    image: ${IMAGE_PREFIX:-ghcr.io/tripolilabs/air-quality}-ingestion:${IMAGE_SHA:?Set IMAGE_SHA to a published full commit SHA}
     container_name: aq-ingestion
     restart: unless-stopped
-    env_file:
-      - path: ${ENV_FILE:-/etc/aq/app.env}
-        required: false
     environment:
       NODE_ENV: production
       PORT: 3001
       TSDB_HOST: timescaledb
       TSDB_PORT: 5432
       TSDB_USERNAME: ${TSDB_USERNAME:-airquality}
-      TSDB_PASSWORD: ${TSDB_PASSWORD}
+      TSDB_PASSWORD: ${TSDB_PASSWORD:?Required}
       TSDB_NAME: ${TSDB_NAME:-telemetry}
-      MQTT_URL: mqtt://ingestion:${MQTT_INGESTION_PASSWORD}@mqtt:1883
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      MQTT_CLIENT_ID: aq-ingestion
+      MQTT_URL: mqtt://ingestion:${MQTT_INGESTION_PASSWORD:?Required}@mqtt:1883
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Required}@redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
@@ -261,7 +263,7 @@ services:
       - aq_net
 
   dashboard:
-    image: ghcr.io/tripolilabs/air-quality-dashboard:${IMAGE_SHA}
+    image: ${IMAGE_PREFIX:-ghcr.io/tripolilabs/air-quality}-dashboard:${IMAGE_SHA:?Set IMAGE_SHA to a published full commit SHA}
     container_name: aq-dashboard
     restart: unless-stopped
     healthcheck:
@@ -280,14 +282,19 @@ services:
     container_name: aq-alloy
     restart: unless-stopped
     user: root
+    environment:
+      GRAFANA_CLOUD_API_TOKEN: ${GRAFANA_CLOUD_API_TOKEN:-}
+      GRAFANA_CLOUD_TEMPO_ENDPOINT: ${GRAFANA_CLOUD_TEMPO_ENDPOINT:-}
+      GRAFANA_CLOUD_TEMPO_USER: ${GRAFANA_CLOUD_TEMPO_USER:-}
+      GRAFANA_CLOUD_PROM_URL: ${GRAFANA_CLOUD_PROM_URL:-}
+      GRAFANA_CLOUD_PROM_USER: ${GRAFANA_CLOUD_PROM_USER:-}
+      GRAFANA_CLOUD_LOKI_URL: ${GRAFANA_CLOUD_LOKI_URL:-}
+      GRAFANA_CLOUD_LOKI_USER: ${GRAFANA_CLOUD_LOKI_USER:-}
     command:
       - "run"
       - "/etc/alloy/config.cloud.alloy"
       - "--server.http.listen-addr=0.0.0.0:12345"
       - "--storage.path=/var/lib/alloy/data"
-    env_file:
-      - path: ${ENV_FILE:-/etc/aq/app.env}
-        required: false
     volumes:
       - ../observability/alloy/config.cloud.alloy:/etc/alloy/config.cloud.alloy:ro
       - /mnt/data/alloy:/var/lib/alloy/data

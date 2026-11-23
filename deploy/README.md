@@ -1,26 +1,17 @@
-# deploy/ — Runtime Composition & Deployment
+# Runtime deployment
 
-Runtime container orchestration, reverse proxy, broker configs, secret provisioning, and backup scripts.
+Production runs on a single Netcup server. Follow the
+[production runbook](../docs/production-deployment.md) from bootstrap to recovery.
 
-## Directory Structure
+- `compose/`: immutable application images, Caddy TLS/HSTS, internal backing services.
+- `chirpstack/`: production configuration using environment credentials and QoS 1 uplinks.
+- `mqtt/`: authenticated Mosquitto and per-user topic permissions.
+- `scripts/`: secrets initialization and application-only deployment with health-gated rollback.
+- `backups/`: nightly logical dumps of both databases and mandatory off-site uploads.
+- `observability/`: Alloy forwarding, dashboards and alert rules.
+- `local/`: local development backing-service configuration.
+- `onprem/`: gateway-box documentation.
 
-```
-deploy/
-├── compose/
-│   ├── docker-compose.prod.yml   # Production compose stack (Hetzner Cloud, immutable GHCR tags)
-│   └── Caddyfile                 # Caddy reverse proxy config (automatic TLS + HSTS)
-├── mqtt/
-│   └── mosquitto.prod.conf       # Production Mosquitto broker config (authenticated, persistent)
-├── scripts/
-│   ├── setup-production-secrets.sh # Secrets generator & permission enforcer (/etc/aq)
-│   └── deploy.sh                 # Zero-downtime deployment script with health gate & rollback
-├── backups/
-│   ├── backup-logical.sh         # Tier 1: Daily pg_dump logical backups
-│   └── backup-physical-wal.sh    # Tier 2: Physical base backups + continuous WAL archiving (PITR)
-├── local/                        # Local dev configurations (Postgres init, dev Mosquitto)
-├── observability/                # Observability stack (Grafana provisioning, alerts.yaml, Alloy configs)
-└── onprem/                       # Gateway-box provisioning
-```
-
-- Local full-stack dev uses the root `docker-compose.yml`.
-- Production deployment architecture and runbooks: see [`docs/production-deployment.md`](../docs/production-deployment.md).
+Plaintext credentials live only in `/opt/aq/.env` on the host. Successful deployments
+update the `/opt/aq/deploy` symlink; retained releases and `/mnt/data` survive updates.
+Ingestion briefly restarts; persistent MQTT sessions queue QoS 1 uplinks during the gap.

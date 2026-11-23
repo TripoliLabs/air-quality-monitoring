@@ -1,0 +1,15 @@
+user chirpstack
+topic write application/+/device/+/event/+
+topic read application/+/device/+/command/+
+topic read eu868/gateway/+/event/+
+topic read eu868/gateway/+/state/+
+topic write eu868/gateway/+/command/+
+topic read $SYS/broker/version
+
+user gateway_bridge
+topic write eu868/gateway/+/event/+
+topic write eu868/gateway/+/state/+
+topic read eu868/gateway/+/command/+
+
+user ingestion
+topic read application/+/device/+/event/up

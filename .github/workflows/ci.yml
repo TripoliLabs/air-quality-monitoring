@@ -46,6 +46,9 @@ jobs:
       - name: Firmware host tests
         run: make -C firmware test
 
+      - name: Deployment failure-path tests
+        run: bash scripts/test-deployment.sh
+
   # Slim integration: the API + ingestion services against their real backing
   # stores (Postgres, TimescaleDB, Redis, Mosquitto). `up api ingestion` pulls in
   # only those via depends_on — NOT the heavy/flaky ChirpStack + simulator +
@@ -79,7 +82,7 @@ jobs:
 
       - name: Wait for the API to be healthy
         run: |
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -fsS http://localhost:3000/health >/dev/null; then exit 0; fi
             sleep 2
           done

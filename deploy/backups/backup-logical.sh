@@ -1,68 +1,53 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Tier 1: Daily Logical Backups (pg_dump)
-# =============================================================================
-# Generates logical, portable backups of PostgreSQL (relational) and TimescaleDB.
-#
-# NOTE: pg_dump provides logical schema and table dumps. It CANNOT perform
-# Point-in-Time Recovery (PITR). For PITR, see backup-physical-wal.sh.
-#
-# Usage:
-#   ./backup-logical.sh [BACKUP_DIR]
-# =============================================================================
-
+# Nightly logical backups. Configure S3-compatible storage in /opt/aq/.env.
 set -euo pipefail
-
+umask 077
+AQ_ROOT="${AQ_ROOT:-/opt/aq}"
 BACKUP_DIR="${1:-/mnt/data/backups/logical}"
-TIMESTAMP=$(date -u +"%Y%m%d_%H%M%SZ")
-RETENTION_DAYS=7
-
-mkdir -p "${BACKUP_DIR}"
-chmod 0700 "${BACKUP_DIR}"
-
-echo "=== Starting Daily Logical Backup at ${TIMESTAMP} ==="
-
-ENV_FILE="/etc/aq/app.env"
-if [ -f "${ENV_FILE}" ]; then
-  # shellcheck disable=SC1090
-  source "${ENV_FILE}"
+mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
+exec 9>"$BACKUP_DIR/backup.lock"
+flock -n 9 || { echo 'Backup already running.' >&2; exit 1; }
+status() {
+  local code=$?
+  printf '%s exit=%s\n' "$(date -u +%FT%TZ)" "$code" > "$BACKUP_DIR/last-run.status"
+  [[ "$code" == 0 ]] || echo 'BACKUP FAILED: inspect aq-backup logs.' >&2
+}
+trap status EXIT
+set -a
+# shellcheck source=/dev/null
+source "$AQ_ROOT/.env"
+set +a
+: "${BACKUP_S3_BUCKET:?Configure off-site backup bucket}"
+: "${AWS_ACCESS_KEY_ID:?Configure S3 access key}"
+: "${AWS_SECRET_ACCESS_KEY:?Configure S3 secret key}"
+command -v aws >/dev/null
+s3_options=()
+if [[ -n "${BACKUP_S3_ENDPOINT:-}" ]]; then
+  [[ "$BACKUP_S3_ENDPOINT" == https://* ]] || { echo 'S3 endpoint must use HTTPS.' >&2; exit 1; }
+  s3_options+=(--endpoint-url "$BACKUP_S3_ENDPOINT")
 fi
-
-RELATIONAL_DUMP="${BACKUP_DIR}/relational_${TIMESTAMP}.dump"
-TELEMETRY_DUMP="${BACKUP_DIR}/telemetry_${TIMESTAMP}.dump"
-
-echo "1. Exporting Relational Database (PostgreSQL)..."
-docker exec -e PGPASSWORD="${APP_DB_PASSWORD:-airquality}" aq-postgres \
-  pg_dump -U "${APP_DB_USERNAME:-airquality}" -d "${APP_DB_NAME:-airquality}" -Fc -Z 6 \
-  > "${RELATIONAL_DUMP}"
-
-echo "   Created: ${RELATIONAL_DUMP} ($(du -h "${RELATIONAL_DUMP}" | cut -f1))"
-
-echo "2. Exporting Telemetry Database (TimescaleDB)..."
-docker exec -e PGPASSWORD="${TSDB_PASSWORD:-airquality}" aq-timescaledb \
-  pg_dump -U "${TSDB_USERNAME:-airquality}" -d "${TSDB_NAME:-telemetry}" -Fc -Z 6 \
-  > "${TELEMETRY_DUMP}"
-
-echo "   Created: ${TELEMETRY_DUMP} ($(du -h "${TELEMETRY_DUMP}" | cut -f1))"
-
-# 3. Off-box Object Storage Sync (if configured)
-if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
-  echo "3. Uploading logical dumps to off-site object storage (s3://${BACKUP_S3_BUCKET}/logical/)..."
-  if command -v aws >/dev/null 2>&1; then
-    aws s3 cp "${RELATIONAL_DUMP}" "s3://${BACKUP_S3_BUCKET}/logical/$(basename "${RELATIONAL_DUMP}")"
-    aws s3 cp "${TELEMETRY_DUMP}" "s3://${BACKUP_S3_BUCKET}/logical/$(basename "${TELEMETRY_DUMP}")"
-    echo "   Upload completed successfully."
-  elif command -v rclone >/dev/null 2>&1; then
-    rclone copy "${RELATIONAL_DUMP}" "backup-s3:${BACKUP_S3_BUCKET}/logical/"
-    rclone copy "${TELEMETRY_DUMP}" "backup-s3:${BACKUP_S3_BUCKET}/logical/"
-    echo "   Rclone upload completed successfully."
+TIMESTAMP=$(date -u +%Y%m%d_%H%M%SZ)
+for database in relational telemetry; do
+  if [[ "$database" == relational ]]; then
+    container=aq-postgres; username="$APP_DB_USERNAME"; dbname="$APP_DB_NAME"
   else
-    echo "   Warning: Neither aws-cli nor rclone found. Skipping remote upload."
+    container=aq-timescaledb; username="$TSDB_USERNAME"; dbname="$TSDB_NAME"
   fi
-fi
-
-# 4. Enforce local retention policy
-echo "4. Pruning local backups older than ${RETENTION_DAYS} days..."
-find "${BACKUP_DIR}" -type f -name "*.dump" -mtime +"${RETENTION_DAYS}" -delete
-
-echo "=== Logical Backup Finished Successfully ==="
+  dump="$BACKUP_DIR/${database}_${TIMESTAMP}.dump"
+  # Local Unix socket inside each DB container; no password in arguments or output.
+  docker exec "$container" pg_dump -U "$username" -d "$dbname" -Fc -Z 6 > "$dump.partial"
+  mv "$dump.partial" "$dump"
+  printf '%s %s\n' "$(docker inspect --format '{{.Config.Image}} {{.Image}}' "$container")" "$username" > "$dump.image"
+  (cd "$BACKUP_DIR" && sha256sum "$(basename "$dump")") > "$dump.sha256"
+  for file in "$dump" "$dump.image" "$dump.sha256"; do
+    aws "${s3_options[@]}" s3 cp "$file" "s3://$BACKUP_S3_BUCKET/logical/$(basename "$file")" --only-show-errors
+  done
+done
+# A pair is usable off-site only after this completion marker is uploaded.
+printf '%s\n' "$TIMESTAMP" > "$BACKUP_DIR/$TIMESTAMP.complete"
+aws "${s3_options[@]}" s3 cp "$BACKUP_DIR/$TIMESTAMP.complete" \
+  "s3://$BACKUP_S3_BUCKET/logical/$TIMESTAMP.complete" --only-show-errors
+find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.dump' -o -name '*.dump.image' \
+  -o -name '*.dump.sha256' -o -name '*.complete' -o -name '*.partial' \) -mtime +7 -delete
+echo "Both databases backed up off-site: $TIMESTAMP"

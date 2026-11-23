@@ -1,0 +1,4 @@
+# Deployment assets must remain executable by Linux shells after Windows checkouts.
+*.sh text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf

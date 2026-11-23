@@ -15,11 +15,11 @@ Open-source distributed air quality monitoring network for Tripoli, Lebanon usin
 > contracts, pnpm+Node, Biome/ESLint split).
 >
 > **Deployment & hosting strategy:** see [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md)
-> — Hetzner (self-hosted, staging + prod), self-hosted Timescale (TigerData retired),
+> — Netcup (self-hosted, production only), self-hosted Timescale (TigerData retired),
 > Mosquitto, Alloy → Grafana Cloud, backups, secrets delivery, firmware roadmap.
 >
 > **Production deployment & runbooks:** see [`docs/production-deployment.md`](docs/production-deployment.md)
-> — OpenTofu (Hetzner), Caddy, secrets, dual-tier backups & CI/CD pipeline (Issue #51).
+> — Netcup bootstrap, Caddy, server-side secrets, logical backups & CI/CD pipeline (Issue #51).
 
 ## Architecture Overview
 
@@ -52,7 +52,7 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 > **self-hosted TimescaleDB** (full TSL — compression/continuous-aggregates/retention);
 > relational app data + ChirpStack state live on **self-hosted PostgreSQL**. They do
 > not cross-join natively — readings are enriched with metadata in the app layer.
-> On Hetzner we self-host both (TigerData retired), so the split is now a *choice*
+> On Netcup we self-host both (TigerData retired), so the split is now a *choice*
 > (isolate ingestion write-load) and can be co-located — see
 > [`docs/deployment-and-strategy.md`](docs/deployment-and-strategy.md).
 
@@ -73,7 +73,7 @@ ESP32 Sensors → LoRaWAN Gateway → ChirpStack → MQTT
 **Maps:** MapLibre GL JS 6+ + OpenStreetMap tiles (open source, no API keys)
 **Charts:** Apache ECharts (better for real-time time-series data)
 **Observability:** OpenTelemetry → Grafana Alloy → **Grafana Cloud** (prod) · self-hosted LGTM stack local-only (dev)
-**Orchestration:** Docker Compose (local) · OpenTofu on **Hetzner Cloud** (staging + prod)
+**Orchestration:** Docker Compose (local + production) · Ubuntu bootstrap on **Netcup**
 
 ### Tooling
 
@@ -125,7 +125,7 @@ air-quality-monitoring/
 │   └── platformio.ini     #   ESP-IDF build
 ├── edge/
 │   └── chirpstack/        # ChirpStack v4 config (gateway)
-├── infra/                 # OpenTofu (Hetzner) — modules/ + environments/
+├── infra/                 # Netcup bootstrap + Docker ingress firewall
 ├── deploy/
 │   ├── observability/     # LGTM stack configs (Prometheus, Grafana provisioning)
 │   └── onprem/            # gateway-box provisioning (ansible/cloud-init)
@@ -245,7 +245,7 @@ realistic ChirpStack uplinks for the fixture nodes, so the pipeline runs on live
 data (simulator → Mosquitto → ingestion → TimescaleDB + Redis → API).
 
 Local Postgres (5432) and TimescaleDB (5439, full-TSL) mirror the self-hosted
-relational + telemetry DBs that run on the Hetzner box in staging/prod.
+relational + telemetry DBs that run on the Netcup box in production.
 
 ### Pre-commit Hooks (Lefthook)
 
@@ -310,13 +310,13 @@ ChirpStack + simulator pipeline) and the ESP32 cross-compile
 - Real PostgreSQL (relational + time-series in one engine)
 - Automatic retention policies for data cleanup
 - **Hosting:** the TSL features (compression/continuous-aggregates/retention) need
-  the full edition. We **self-host it on the Hetzner box** (just Postgres + the
+  the full edition. We **self-host it on the Netcup box** (just Postgres + the
   extension) — no managed telemetry DB. TigerData is retired; DO Managed Postgres
   was never viable (Apache-2.0 edition only). See docs/deployment-and-strategy.md.
 
 ### Why two separate databases? (ADR-001)
 - Historically forced: DO Managed Postgres couldn't run Timescale TSL. **Self-hosting
-  on Hetzner removes that constraint**, so the split is now a *choice* — isolate
+  on Netcup removes that constraint**, so the split is now a *choice* — isolate
   ingestion write-load from app reads — and both can be **co-located on one box**
   for Phase 1 (one thing to back up/patch). Split onto separate boxes when load demands.
 
@@ -539,7 +539,7 @@ Sensor readings JSON structure:
 - ChirpStack Docs: https://www.chirpstack.io/docs/
 - TimescaleDB Docs: https://docs.timescale.com/
 - TimescaleDB Docs: https://docs.timescale.com/
-- OpenTofu Docs: https://opentofu.org/docs/
+- Production runbook: docs/production-deployment.md
 - MapLibre GL JS: https://maplibre.org/maplibre-gl-js/docs/
 
 **LoRaWAN & Air Quality:**

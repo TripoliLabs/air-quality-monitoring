@@ -55,7 +55,8 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
     // Shared subs only distribute among ONLINE members, so single-instance stays on
     // the plain topic to keep the queue-on-restart guarantee.
     const topic = shareGroup ? `$share/${shareGroup}/${UPLINK_TOPIC}` : UPLINK_TOPIC;
-    this.log.info('connecting to MQTT broker', { url, clientId, topic });
+    // The broker URL can contain production credentials; never put it in logs.
+    this.log.info('connecting to MQTT broker', { clientId, topic });
     this.client = connect(url, { clientId, clean: false });
     this.client.on('connect', () => {
       this.client?.subscribe(topic, { qos: 1 }, (err) => {

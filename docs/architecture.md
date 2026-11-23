@@ -10,7 +10,7 @@
 > ⚠️ **Superseded on hosting/DB/broker/observability:** the DigitalOcean +
 > TigerData + EMQX/NanoMQ + affected-graph references below predate
 > [`deployment-and-strategy.md`](deployment-and-strategy.md), which is now the
-> source of truth — **Hetzner self-hosted, self-hosted Timescale (TigerData
+> source of truth — **Netcup self-hosted, self-hosted Timescale (TigerData
 > retired), Mosquitto everywhere, Alloy → Grafana Cloud**, and CI is Turbo
 > *caching* (affected-graph filtering is still a TODO). Those sections here are
 > pending an ADR refresh; trust the deployment doc where they conflict.
@@ -29,7 +29,7 @@ binds them:
 | 3 | **On-prem / edge** | ESP32 firmware + LoRaWAN gateway capture/forward | Field + gateway |
 
 Cross-cutting: shared TypeScript libraries, observability (LGTM), message
-brokers, cloud infrastructure (DigitalOcean via OpenTofu), CI/CD, and on-prem
+brokers, cloud infrastructure (Netcup via bootstrap), CI/CD, and on-prem
 deployment workflows.
 
 ### Data flow
@@ -88,16 +88,12 @@ air-quality-monitoring/
 │  ├─ domain/                #   Pure logic: AQI calc, unit conversions, thresholds, core types
 │  ├─ contracts/             #   Zod schemas: REST DTOs + event/MQTT/WS payloads (single source of truth)
 │  ├─ db/                    #   Drizzle schema + migrations + typed clients for BOTH databases
-│                            #     (DO relational + TigerData telemetry)
+│                            #     (self-hosted PostgreSQL + TimescaleDB)
 │  ├─ telemetry-codec/       #   LoRa payload spec + TS decoder, mirrors the firmware C struct
 │  ├─ observability/         #   OpenTelemetry init, structured logger, metric helpers
 │  └─ config/                #   Shared tsconfig / biome / eslint presets + env schema (Zod)
 │
-├─ infra/                    # OpenTofu — DigitalOcean provisioning
-│  ├─ modules/               #   reusable: droplet, managed-pg, spaces, vpc, dns, firewall
-│  └─ environments/
-│     ├─ staging/
-│     └─ production/
+├─ infra/                    # Netcup Ubuntu bootstrap and Docker ingress firewall
 │
 ├─ deploy/                   # Runtime composition (the "how it runs")
 │  ├─ compose/               #   local full-stack docker-compose (moved from root)
@@ -142,7 +138,7 @@ These are built first; everything else depends on them.
 | `@aq/config` | tsconfig/biome/eslint presets, runtime env schema (Zod) | everything |
 | `@aq/domain` | AQI math, unit conversions, thresholds, framework-free core types | dashboard, api, ingestion |
 | `@aq/contracts` | Zod schemas for REST DTOs **and** MQTT/WS event payloads | dashboard, api, ingestion |
-| `@aq/db` | Drizzle schema + migrations + typed clients for **both** DBs (DO relational + TigerData telemetry) | api, ingestion |
+| `@aq/db` | Drizzle schema + migrations + typed clients for **both** DBs (self-hosted PostgreSQL + TimescaleDB) | api, ingestion |
 | `@aq/telemetry-codec` | LoRa byte-layout spec + TS decoder (mirrors firmware struct) | ingestion (+ firmware via codegen) |
 | `@aq/observability` | OTel SDK init, logger, metric/trace helpers | api, ingestion |
 
@@ -331,17 +327,15 @@ when oxfmt hits stable 1.0. The frontend stays on ESLint regardless.
 
 ## 5. Cross-cutting concerns
 
-### Infrastructure — `infra/` (OpenTofu, DigitalOcean)
+### Infrastructure — `infra/` (Netcup)
 
-- Reusable `modules/` (droplet/app-platform, DO Managed Postgres, Spaces, VPC,
-  DNS, firewall) composed per environment under `environments/{staging,production}/`.
-- **State** in DigitalOcean Spaces (S3-compatible backend) with locking.
-- **TigerData lives outside the DO plane.** The telemetry DB is provisioned on
-  TigerData (its own console / Terraform provider), so it's a second managed
-  vendor — reference its connection string as a secret in `infra/`, but don't
-  expect it under the DO provider.
-- **Provisioning (`infra/`) is separate from deployment (`deploy/`)** — OpenTofu
-  stands up the boxes/managed services; app rollout is its own pipeline.
+- One manually ordered Ubuntu 24.04 server, initialized with `infra/bootstrap.sh`.
+- Self-hosted PostgreSQL and TimescaleDB; persistent data under `/mnt/data`.
+- Production only; local Docker Compose exercises the pre-production pipeline.
+- Host setup is separate from application deployment. CI/CD updates applications
+  without restarting backing services; credentials live in `/opt/aq/.env`.
+- Nightly off-site logical backups and tested restores provide disaster recovery.
+  See [the production runbook](production-deployment.md).
 
 ### Observability — `deploy/observability/` + `packages/observability`
 
@@ -418,7 +412,7 @@ throughout; valuable existing config is **moved into new homes, not deleted**.
 6. **Relocate infra/runtime config:** `gateway/` → `edge/chirpstack/`, root
    `docker-compose.yml` stays at root for local dev (a thinned cloud composition
    may live under `deploy/`), `monitoring/` → `deploy/observability/`, stand up
-   `infra/` (OpenTofu) and `deploy/onprem/`.
+   `infra/` (Netcup bootstrap) and `deploy/onprem/`.
 7. **Rewire CI/CD** to the Turbo affected graph; isolate the firmware workflow.
 
 ### What carries over from the old structure (move, don't delete)
