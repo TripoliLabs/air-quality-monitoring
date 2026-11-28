@@ -37,10 +37,9 @@ de = table([
 
 lb = table([
     ('part_cell', '18650 cells, about 3,000 mAh', 'Flat top, e.g. Samsung 30Q or LG MJ1. We have 2: buy 2 more. Trusted shop; fakes are common.', '2', 'Tripoli', 'to find', ''),
-    ('part_perf', '4 × 6 cm perfboard, double-sided', 'One carrier per box, one spare. Plated holes.<sup>5</sup>', '4', 'Electroslab', '$0.32', '$1.28'),
-    ('p_jst', 'JST-XH 4-pin sockets and plugs', 'Two per box (one per sensor), plus spares; with crimped leads if possible.', '8', 'Tripoli', 'to find', ''),
-    ('p_header', '2.54 mm male header strip', 'Six pins on the T-Beam and six on the perfboard, per box.', '2 strips', 'Tripoli', 'to find', ''),
-    ('p_heatshrink', 'Silicone wire 26 AWG and heat-shrink', 'Wires between the boards and to the sensors.', '1 set', 'Tripoli', 'to find', ''),
+    ('p_jst', 'JST-XH 4-pin plug pairs, with leads', 'One per sensor, so a broken sensor unplugs on the pole. Two per box, plus spares.', '8', 'Tripoli', 'to find', ''),
+    ('p_header', '2.54 mm male header strip', 'Only if the T-Beams’ pins aren’t soldered on yet.', '2 strips', 'Tripoli', 'to find', ''),
+    ('p_heatshrink', 'Silicone wire 26 AWG and heat-shrink', 'Sensor wires, and heat-shrink to cover the booster and every joint.', '1 set', 'Tripoli', 'to find', ''),
     ('p_solder', 'Solder 0.8 mm', 'If we have none.', '1', 'Tripoli', 'to find', ''),
     ('p_filament', 'PETG or ASA filament, light colour', 'For the boxes. Not PLA: it softens in the sun.', '1 kg', 'Tripoli', 'to find', ''),
 ])
@@ -55,7 +54,6 @@ src = [
     ('Adafruit MiniBoost 5 V 1 A, product 4654', 'adafruit.com/product/4654'),
     ('Soldered 333058 PMS7003 adapter, Welectron', 'welectron.com/Soldered-333058-PMS7003-sensor-adapter'),
     ('BerryBase jumper wires', 'berrybase.de/en/components/prototyping/jumper-cable/'),
-    ('4*6 cm Universal PCB Prototype Board Double-Sided, Electroslab, Lebanon (seen 28 November 2026)', 'electroslab.com'),
     ('Backup if the German adapters sell out: AliExpress PMS7003 adapter with cable, about $2.40, 2 to 8 weeks', 'aliexpress.com, search “PMS7003 adapter”'),
 ]
 sl = ''.join(f'<li><b>{a}</b><span>{b}</span></li>' for a, b in src)
@@ -93,13 +91,13 @@ h3{font-size:14px;font-weight:560;margin:4px 0 8px}
 '''
 
 p1 = f'''<section class="pg"><div class="hd"><div class="brand">{MARK}<div><h1>Shopping list</h1><span>Qalawun sensor boxes · first build of three, plus the gateway</span></div></div>
-<div class="sum">UK order paid: <b>£40.30</b> · Germany: <b>about €12</b> · Lebanon: boards $1.28, the rest to find<br>28 November 2026</div></div>
+<div class="sum">UK order paid: <b>£40.30</b> · Germany: <b>about €12</b> · Lebanon: prices to find<br>28 November 2026</div></div>
 <div class="cols"><div>
 <h2>Ordered in the UK</h2><div class="sn">The Pi Hut. Paid, on its way. Prices include UK VAT.</div>{uk}
 <h2>Order in Germany</h2><div class="sn">Delivered to the visitor in Germany, then carried to Tripoli. Prices from the shops’ sites, 23 November 2026.</div>{de}
 <div class="tip"><b>Why three adapters:</b> our three PMS7003s came without one. The Pi Hut bundle brings its own, so three leaves a spare. No PMS7003 adapter was found for sale in Turkey.</div>
 </div><div>
-<h2>Buy in Lebanon</h2><div class="sn">Common parts for the perfboard build in the white paper.</div>{lb}
+<h2>Buy in Lebanon</h2><div class="sn">Common parts. No perfboard: the sensors wire straight to the T-Beam.</div>{lb}
 <h2>Already have, don’t buy</h2><div class="sn">From the February invoices, and the October bench test.</div><ul class="have">{hv}</ul>
 </div></div>
 <div class="ft"><span>Qalawun · TripoliLabs</span><span><sup>n</sup> = source on page 2</span><span>1 / 2</span></div></section>'''
@@ -110,7 +108,7 @@ p2 = f'''<section class="pg"><div class="hd"><div class="brand">{MARK}<div><h1>S
 <li>Cells: check the label and weight. A real 3,000 mAh 18650 weighs about 45 to 50 g; a light one is a fake.</li>
 <li>Filament: PETG or ASA, not PLA.</li>
 <li>Adapters: the sensor’s plug is 1.27 mm, two rows of five. Check the photo of any other adapter.</li>
-<li>Perfboard: double-sided with plated holes holds up better to rework.</li></ul>
+<li>JST plugs: get the XH type (2.5 mm pitch) with crimped leads, so no crimp tool is needed.</li></ul>
 <h3 style="margin-top:16px">Images</h3><p style="color:#3d5566">All pictures are renders of our own 3D model, not product photos. The T-Beam and the MiniBoost come from their makers’ CAD models.</p></div></div>
 <div class="ft"><span>Qalawun · TripoliLabs</span><span></span><span>2 / 2</span></div></section>'''
 

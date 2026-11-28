@@ -12,9 +12,9 @@ animation on the About page.
 | Adafruit MiniBoost 5 V 1 A | Adafruit's STEP (`4654 MiniBoost 5V` in [Adafruit_CAD_Parts](https://github.com/adafruit/Adafruit_CAD_Parts), MIT) |
 | PMS7003 | Modelled: 48 × 37 × 12 mm, inlet and outlet on the front face |
 | BME280 breakout | Modelled: purple 6-pin board, 15 × 11.5 mm |
-| Perfboard carrier | Modelled: standard 4 × 6 cm double-sided board, 2.54 mm pitch, two JST-XH plugs, 6-pin header |
 | Solar panel | Modelled: 136 × 110 mm (typical 5 V 2 W panel; measure ours) |
-| Printed box | Our design: 170 × 110 mm footprint, sealed top room, louvred bottom room |
+| Printed box | Our design: 112 × 84 mm footprint, sealed top room, louvred bottom room |
+| Wiring | Eight wires from the T-Beam's header pins (per the V1.2 schematic) through a grommet; the MiniBoost in clear heat-shrink in the sensor room |
 | DLOS8N gateway | Modelled: 260 × 90 × 85 mm |
 
 The T-Beam has one LoRa antenna. LilyGO's file draws the whip twice (straight and

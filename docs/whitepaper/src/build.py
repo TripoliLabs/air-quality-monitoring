@@ -179,18 +179,20 @@ def wiring():
 <defs><marker id="aw" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8z" fill="#0c2231"/></marker></defs>
 <g class="nd"><rect x="0" y="10" width="120" height="50" rx="8"/><text x="12" y="32" class="t">Solar panel</text><text x="12" y="49" class="s">5 V, 2 W, USB lead</text></g>
 <path d="M120,35 H190" class="ar2" marker-end="url(#aw)"/><text x="126" y="28" class="as">micro-USB, 5 V</text>
-<g class="nd dk"><rect x="192" y="0" width="210" height="200" rx="10"/><text x="206" y="24" class="t">LILYGO T-Beam V1.2</text>
-<rect x="206" y="36" width="182" height="40" rx="5" class="in"/><text x="216" y="53" class="s">AXP2101: charges the cell, makes</text><text x="216" y="68" class="s">3.3 V, measures the battery</text>
+<g class="nd dk"><rect x="192" y="0" width="210" height="228" rx="10"/><text x="206" y="24" class="t">LILYGO T-Beam V1.2</text>
+<rect x="206" y="36" width="182" height="40" rx="5" class="in"/><text x="216" y="53" class="s">AXP2101: charges the cell, runs</text><text x="216" y="68" class="s">the 3.3 V rails, measures the battery</text>
 <rect x="206" y="84" width="182" height="28" rx="5" class="in"/><text x="216" y="103" class="s">18650 cell, 3.7 V, in its holder</text>
 <rect x="206" y="120" width="182" height="28" rx="5" class="in"/><text x="216" y="139" class="s">ESP32 + SX1276 LoRa, 868 MHz</text>
-<text x="206" y="178" class="s">header: 3.3 V · GND · 21 · 22 · 13 · 14</text></g>
-<g class="nd br"><rect x="192" y="226" width="210" height="70" rx="10"/><text x="206" y="248" class="t">Perfboard carrier, 4 × 6 cm</text>
-<text x="206" y="266" class="s">MiniBoost 5 V · two 4-pin JST-XH plugs</text><text x="206" y="282" class="s">six short wires to the T-Beam header</text></g>
-<path d="M297,200 V224" class="ar2" marker-end="url(#aw)"/>
-<g class="nd"><rect x="470" y="30" width="170" height="70" rx="8"/><text x="482" y="52" class="t">BME280</text><text x="482" y="69" class="s">I2C at 3.3 V</text><text x="482" y="85" class="s">SDA → 21 · SCL → 22</text></g>
-<g class="nd"><rect x="470" y="190" width="170" height="90" rx="8"/><text x="482" y="212" class="t">PMS7003</text><text x="482" y="229" class="s">5 V from the MiniBoost</text><text x="482" y="245" class="s">TX → 13 · RX ← 14</text><text x="482" y="261" class="s">3.3 V logic, no shifter</text></g>
-<path d="M402,262 H436 V75 H468" class="ar2" marker-end="url(#aw)"/><text x="440" y="130" class="as">4 wires</text>
-<path d="M402,270 H450 V235 H468" class="ar2" marker-end="url(#aw)"/><text x="410" y="258" class="as">4 wires</text>
+<text x="206" y="174" class="s">one edge: 3.3V · GND · 22 · 21 · 3.3V</text>
+<text x="206" y="192" class="s">other edge: GND · 13 · 14</text>
+<text x="206" y="214" class="s" style="fill:#8ca5b3">3 GND pins, two 3.3 V pins: none shared</text></g>
+<g class="nd"><rect x="470" y="10" width="170" height="70" rx="8"/><text x="482" y="32" class="t">BME280</text><text x="482" y="49" class="s">3.3 V, GND, SDA → 21,</text><text x="482" y="65" class="s">SCL → 22 (I2C)</text></g>
+<g class="nd br"><rect x="440" y="118" width="200" height="56" rx="8"/><text x="452" y="140" class="t">MiniBoost 5 V, in heat-shrink</text><text x="452" y="158" class="s">3.3 V in from the second 3.3 V pin</text></g>
+<g class="nd"><rect x="470" y="212" width="170" height="84" rx="8"/><text x="482" y="234" class="t">PMS7003</text><text x="482" y="251" class="s">5 V and GND from the booster</text><text x="482" y="267" class="s">TX → 13 · RX ← 14</text><text x="482" y="283" class="s">3.3 V logic, no shifter</text></g>
+<path d="M402,45 H468" class="ar2" marker-end="url(#aw)"/><text x="408" y="38" class="as">4 wires · JST</text>
+<path d="M402,146 H438" class="ar2" marker-end="url(#aw)"/><text x="406" y="139" class="as">2 wires</text>
+<path d="M540,174 V210" class="ar2" marker-end="url(#aw)"/><text x="546" y="196" class="as">5 V, GND</text>
+<path d="M402,200 H430 V250 H468" class="ar2" marker-end="url(#aw)"/><text x="406" y="243" class="as">2 wires · JST</text>
 </svg>'''
 
 
@@ -200,7 +202,7 @@ EXPLODED = callout_fig('exploded', 640, 760, (212, 0, 226), [
     dict(a='lid', x=455, y=None, w=180, t='Lid and brackets', d='Printed; holds the panel at 30°.'),
     dict(a='ant', x=455, y=None, w=180, t='LoRa antenna', d='The T-Beam’s own, through the wall.'),
     dict(a='tbeam', x=0, y=None, w=200, t='LILYGO T-Beam V1.2', d='ESP32, LoRa radio, charger, 18650 cell.'),
-    dict(a='perf', x=0, y=None, w=200, t='Perfboard carrier', d='MiniBoost and the sensor plugs.'),
+    dict(a='boost', x=0, y=None, w=200, t='MiniBoost in heat-shrink', d='3.3 V in, 5 V out for the PMS7003.'),
     dict(a='upper', x=455, y=None, w=180, t='Top room, sealed', d='Electronics stay dry.'),
     dict(a='gland', x=0, y=None, w=200, t='Cable gland', d='The panel lead comes in here.'),
     dict(a='pms', x=0, y=None, w=200, t='PMS7003', d='Laser particle counter.'),
@@ -212,14 +214,14 @@ CUTAWAY = callout_fig('cutaway', 640, 470, (130, 6, 370), [
     dict(a='ant', x=512, y=None, w=128, t='Antenna', d='screwed on through the wall'),
     dict(a='tbeam', x=512, y=None, w=128, t='T-Beam', d='on four printed posts'),
     dict(a='usb', x=512, y=None, w=128, t='Panel lead', d='micro-USB, from the gland'),
-    dict(a='perf', x=0, y=None, w=115, t='Perfboard', d='on four posts'),
-    dict(a='boost', x=0, y=None, w=110, t='MiniBoost', d='3.7 V → 5 V'),
-    dict(a='jst', x=0, y=None, w=110, t='JST-XH plugs', d='one per sensor'),
+    dict(a='hdr', x=0, y=None, w=115, t='Header pins', d='wires soldered on'),
+    dict(a='grommet', x=0, y=None, w=115, t='Grommet', d='wires down to the sensors'),
 ])
 LOWER = callout_fig('lower_room', 640, 330, (120, 10, 400), [
     dict(a='pms', x=0, y=None, w=115, t='PMS7003', d='on four feet'),
     dict(a='inlet', x=0, y=None, w=115, t='Inlet', d='faces the louvres'),
     dict(a='adapter', x=525, y=None, w=115, t='Adapter', d='1.27 mm plug to wires'),
+    dict(a='boost', x=525, y=None, w=115, t='MiniBoost', d='in heat-shrink, 3.3 → 5 V'),
     dict(a='bme', x=525, y=None, w=115, t='BME280', d='on a post, far from the fan'),
     dict(a='louvre', x=0, y=None, w=115, t='Louvres', d='angled down at 35°'),
 ])
@@ -282,7 +284,7 @@ whether anything is improving.</p>
 <tr><td>Work through power cuts</td><td>Each box runs on its own solar panel and cell. Only the gateway needs power, and it can carry its own backup.</td></tr>
 <tr><td>Need no internet at the box</td><td>LoRaWAN radio: one gateway covers many boxes several kilometres away; the gateway itself uses 4G.</td></tr>
 <tr><td>Cheap enough to cover a city</td><td>Off-the-shelf boards and sensors, a 3D-printed box, about $65 in parts per box.</td></tr>
-<tr><td>Easy to build and fix</td><td>Hand-soldered on a perfboard, every part replaceable; one design for every box.</td></tr>
+<tr><td>Easy to build and fix</td><td>Wired by hand straight to the board’s pins, sensors on plugs, every part replaceable; one design for every box.</td></tr>
 <tr><td>Trustworthy</td><td>Open hardware, firmware and server; every reading public; honest about sensor limits.</td></tr>
 <tr><td>For everyone in Tripoli</td><td>Arabic and English, phone first, light on data.</td></tr></table>
 </section>'''
@@ -312,45 +314,50 @@ out. The panel sits on four printed brackets above the lid, tilted 30° to face 
 </section>
 <section class="sec brk">
 <h3>Parts</h3>
-<p>We have three of each of the main parts already, enough for the first three boxes and the gateway.</p>
+<p>We have three of each of the main parts already, enough for the first three boxes and the gateway. There is no extra circuit board: the sensors wire straight to the T-Beam.</p>
 <div class="parts">
 {''.join(f'<div class="pt"><div class="pi">{img(n, w)}</div><b>{t}</b><span>{d}</span></div>' for n, w, t, d in [
     ('part_tbeam', 200, 'LILYGO T-Beam V1.2, 868 MHz', 'ESP32, SX1276 LoRa radio, AXP2101 charger, 18650 holder, one antenna.' + ref(5)),
     ('part_pms', 150, 'Plantower PMS7003', 'Laser particle counter, 48 × 37 × 12 mm. 5 V supply, 3.3 V serial data.' + ref(6)),
     ('part_bme', 110, 'BME280 breakout', 'Bosch sensor for temperature, humidity and pressure, over I2C.' + ref(7)),
-    ('part_perf', 170, 'Perfboard carrier', 'Standard 4 × 6 cm, double-sided. Adafruit MiniBoost 5 V (CAD model) and two JST-XH plugs.' + ref(8)),
+    ('part_boost', 120, 'MiniBoost 5 V', 'Adafruit’s CAD model. 11 × 18 mm; rides in heat-shrink on the PMS7003’s power wire.' + ref(8)),
     ('part_cell', 170, '18650 cell, 3,000 mAh', 'One per box, in the T-Beam’s holder. Bought locally from a trusted shop.'),
     ('part_panel', 170, 'Solar panel, 5 V 2 W', 'About 136 × 110 mm, USB lead straight into the T-Beam.'),
-    ('part_box', 160, 'Printed enclosure', 'About 170 × 110 × 96 mm plus brackets. PETG or ASA, light colour.'),
+    ('part_box', 160, 'Printed enclosure', 'About 112 × 84 × 96 mm plus brackets. PETG or ASA, light colour.'),
     ('part_gateway', 60, 'Dragino DLOS8N gateway', '260 × 90 × 85 mm, outdoor, 8 channels, 4G. One covers many boxes.' + ref(9)),
 ])}
 </div>
 <table class="tbl cost"><tr><th>Cost per box (parts)</th><th>US$</th></tr>
 <tr><td>LILYGO T-Beam V1.2</td><td>29 – 32</td></tr><tr><td>Plantower PMS7003 and adapter</td><td>13 – 15</td></tr>
 <tr><td>BME280 breakout</td><td>2.5 – 3</td></tr><tr><td>Solar panel, cell, MiniBoost</td><td>about 15</td></tr>
-<tr><td>Perfboard, plugs, wire, gland, filament</td><td>about 5</td></tr>
+<tr><td>JST plugs, wire, heat-shrink, gland, filament</td><td>about 5</td></tr>
 <tr class="tot"><td>Total, estimate</td><td>about 65 – 70</td></tr></table>
 </section>
 <section class="sec">
 <h3>Inside the top room</h3>
-<p>The T-Beam stands on four printed posts with its antenna end against the right wall. Its own antenna screws on
-through a hole in that wall and turns up, clear of the panel. Next to it, a standard 4 × 6 cm perfboard carries the MiniBoost
-and two JST-XH plugs, one per sensor. Six short soldered wires link the T-Beam's header to the perfboard. The panel's USB
-lead enters through a cable gland in the front wall, straight in line with the T-Beam's micro-USB socket.</p>
+<p>The top room holds only the T-Beam, on four printed posts with its antenna end against the right wall. Its own
+antenna screws on through a hole in that wall and turns up, clear of the panel. The panel’s USB lead enters through a
+cable gland in the front wall, straight in line with the T-Beam’s micro-USB socket. Eight wires are soldered to the
+T-Beam’s header pins and run down through a grommet to the sensors.</p>
 {fig(CUTAWAY, 'The top room with the front and side walls removed.', True)}
-<p>We use a perfboard rather than loose jumper wires because a box on a pole shakes in the wind for years: soldered
-joints and locking plugs do not work loose. It still needs soldering, but every part can be unplugged and swapped.
-A custom PCB only makes sense once the wiring has stopped changing and we build boxes by the dozen.</p>
+<p>No extra board is needed. LilyGO’s schematic shows three ground pins and two 3.3 V pins on the header{ref(16)}, so
+every wire has a pin of its own and nothing is spliced. Leaving out a perfboard halves the box’s footprint, from
+170 × 110 mm to 112 × 84 mm. Each sensor connects through a small locking JST plug, so a broken sensor can be swapped on
+the pole without a soldering iron. A custom PCB only makes sense once we build boxes by the dozen.</p>
 <h3>The sensor room</h3>
-{fig(LOWER, 'The bottom room on its own. The PMS7003 sits on four feet with its inlet facing the louvres; the BME280 sits on a post on the far side, away from the fan’s warm air.', True)}
+{fig(LOWER, 'The bottom room on its own. The PMS7003 sits on four feet with its inlet facing the louvres; the MiniBoost lies beside it in heat-shrink; the BME280 sits on a post on the far side, away from the fan’s warm air.', True)}
 </section>
 <section class="sec">
 <h3>Wiring</h3>
 {fig(wiring(), 'How the parts connect. Pin numbers are the ones the firmware expects.' + ref(10), True)}
 <table class="tbl"><tr><th>Sensor</th><th>Connections</th></tr>
-<tr><td>BME280</td><td>VCC → 3.3 V · GND → GND · SCL → GPIO 22 · SDA → GPIO 21 (I2C address 0x76). CSB and SDO left free.</td></tr>
-<tr><td>PMS7003</td><td>VCC → MiniBoost 5 V · GND → GND · TX → GPIO 13 · RX ← GPIO 14. The sensor's data lines are 3.3 V, so no level shifter is needed.</td></tr>
-<tr><td>Still open</td><td>Where the MiniBoost draws its power, and whether the firmware switches the PMS7003 off completely between readings.</td></tr></table>
+<tr><td>BME280</td><td>VCC → 3.3 V pin · GND → GND · SCL → GPIO 22 · SDA → GPIO 21 (I2C address 0x76). CSB and SDO left free.</td></tr>
+<tr><td>MiniBoost</td><td>IN → the second 3.3 V pin · GND → GND · OUT → PMS7003 VCC. Covered in heat-shrink.</td></tr>
+<tr><td>PMS7003</td><td>VCC → MiniBoost 5 V · GND → booster GND · TX → GPIO 13 · RX ← GPIO 14. Its data lines are 3.3 V, so no level shifter.</td></tr>
+<tr><td>Power rail</td><td>Both 3.3 V pins come from the power chip’s DCDC3 rail, which the firmware must switch on. It stays on through sleep; the particle counter’s fan sleeps on a serial command.</td></tr></table>
+<p class="small">Why not the “5V” pin? On the V1.2 it carries the board’s system supply, which follows the battery at night
+and rises towards the panel’s voltage in the sun. The header has no battery pin. The 3.3 V rail is steady and the
+booster turns it into the 5 V the particle counter needs.{ref(16)}</p>
 {fig(img('top_room', 520, 'display:block;margin:0 auto'), 'The top room from above. Front wall at the bottom; the gland and USB lead on the front, the antenna on the right, wires to the sensors through a grommet at the back left.', True)}
 <h3>Designed to fit</h3>
 <p>Every part is placed in one 3D model, and a script checks that no two parts intersect: boards, posts, walls,
@@ -446,7 +453,7 @@ and the sensor is the cheapest part to replace.</li></ul>
 <p>We start small and spend more only once the step before has proven itself.</p>
 <div class="stages">
 <div><span class="tag done">Done</span><b>Bench test</b><p>One T-Beam joined our network through the DLOS8N gateway and its reading was decoded by our server (7 October 2026).</p></div>
-<div><span class="tag now">Next</span><b>Three boxes</b><p>Wired by hand on perfboards, in printed boxes, in three neighbourhoods. Run for months on sun alone.</p></div>
+<div><span class="tag now">Next</span><b>Three boxes</b><p>Wired by hand, in printed boxes, in three neighbourhoods. Run for months on sun alone.</p></div>
 <div><span class="tag">Later</span><b>25 to 50 boxes</b><p>Our own PCB, a few more gateways, a public API.</p></div>
 <div><span class="tag">Later</span><b>100+ boxes</b><p>OpenAQ integration and partnerships with universities.</p></div></div>
 {fig(f'<div class="map" style="width:78%;margin:0 auto"><img src="img/map_brand.png"><svg viewBox="0 0 {MAP["size"][0]} {MAP["size"][1]}">' + ''.join(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="14" fill="#0a6788" stroke="#fff" stroke-width="4"/><text x="{x + (-20 if n.startswith(("El Mina", "Zahrieh")) else 20):.0f}" y="{y + 7:.0f}" text-anchor="{"end" if n.startswith(("El Mina", "Zahrieh")) else "start"}" class="mp">{n}</text>' for n, x, y in MAP['pts']) + f'<circle cx="640" cy="690" r="{3 * MAP["km_px"]:.0f}" fill="none" stroke="#0c2231" stroke-width="3" stroke-dasharray="14 10"/><rect x="630" y="680" width="20" height="20" fill="#0c2231"/><rect x="60" y="1220" width="{MAP["km_px"]:.0f}" height="10" fill="#0c2231"/><text x="60" y="1205" class="mp">1 km</text></svg></div>', 'Example sites from our simulator, and a 3 km ring around one possible gateway roof. Real sites are still to be chosen, with the owners’ permission. Map data © OpenStreetMap contributors.' + ref(14), True)}
@@ -468,7 +475,7 @@ s9 = f'''<section class="sec brk">
 <li>Solder the BME280 pins; confirm it is a BME280 (chip ID 0x60), not a BMP280</li>
 <li>Fit the PMS7003 adapters and read the sensor on the real board</li>
 <li>Measure each panel's open-circuit voltage in full sun: 6 V or less</li>
-<li>Decide the MiniBoost's power source and fan switching</li>
+<li>Firmware: switch on the 3.3 V header rail (DCDC3) at boot</li>
 <li>Measure sleep current and energy per cycle</li>
 <li>Remote settings on a real box, including after a power cut</li>
 <li>Print a test box: fit, heat in the sun, rain through the louvres</li>
@@ -500,7 +507,8 @@ today. The project is run by TripoliLabs volunteers. You can host a box on your 
 <li>ChirpStack documentation. chirpstack.io/docs</li>
 <li>US EPA. <i>Technical Assistance Document for the Reporting of Daily Air Quality – the AQI</i>.</li>
 <li>OpenStreetMap contributors. Map data under the ODbL. openstreetmap.org/copyright</li>
-<li>Voltaic Systems. Small solar panels: P124, P126 specifications. voltaicsystems.com/small-solar-panels</li></ol>
+<li>Voltaic Systems. Small solar panels: P124, P126 specifications. voltaicsystems.com/small-solar-panels</li>
+<li>LILYGO. T-Beam V1.2 schematic, <code>schematic/LilyGo_TBeam_V1.2.pdf</code>. github.com/Xinyuan-LilyGO/LilyGo-LoRa-Series</li></ol>
 <p class="small">All drawings in this paper are renders of our own 3D model, not photographs. Prices are estimates
 from November 2026. Power figures are estimates from datasheets until measured.</p>
 </section>'''

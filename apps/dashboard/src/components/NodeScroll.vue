@@ -26,7 +26,7 @@ const FRAMES = Object.entries(
   .map(([, url]) => url);
 const LAST = FRAMES.length - 1;
 const TRACK: Record<string, number[][]> = labelTrack;
-const PARTS = ['panel', 'antenna', 'tbeam', 'perf', 'pms', 'bme'] as const;
+const PARTS = ['panel', 'antenna', 'tbeam', 'boost', 'pms', 'bme'] as const;
 const STEPS = ['whole', 'top', 'bottom'] as const;
 
 const root = ref<HTMLElement | null>(null);
@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
 /** Which column each part's label sits in once the box is open. */
 const SIDE: Record<(typeof PARTS)[number], 'l' | 'r'> = {
   panel: 'l',
-  perf: 'l',
+  boost: 'l',
   pms: 'l',
   antenna: 'r',
   tbeam: 'r',

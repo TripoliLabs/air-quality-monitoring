@@ -249,9 +249,10 @@ export default {
       board: 'LILYGO T-Beam: ESP32 with LoRa radio, battery charger and one 18650 lithium cell',
       particles: 'Plantower PMS7003 laser particle counter',
       climate: 'Bosch BME280 temperature, humidity and pressure sensor',
-      power: 'A 5 V, 2 W solar panel; a small booster gives the particle counter its 5 V',
+      power:
+        'A 5 V, 2 W solar panel; a small booster, from the T-Beam’s 3.3 V pin, gives the particle counter its 5 V',
       carrier:
-        'A 4 × 6 cm perfboard that carries the booster and the sensor plugs, so every wire is soldered',
+        'No extra board: every sensor wire goes straight to its own pin on the T-Beam, through locking JST plugs',
     },
     node: {
       label: 'The sensor box opening into its parts as you scroll',
@@ -263,18 +264,18 @@ export default {
         },
         top: {
           title: 'The top room',
-          body: 'The T-Beam (ESP32 and LoRa radio, with its cell and charger) and a small perfboard with the 5 V booster and the sensor plugs.',
+          body: 'Only the T-Beam: ESP32 and LoRa radio, with its cell and charger. Its antenna screws on through the wall, and eight wires run from its pins down to the sensors.',
         },
         bottom: {
           title: 'The sensor room',
-          body: 'The particle counter and the climate sensor breathe through angled louvres, out of the sun and rain.',
+          body: 'The particle counter and the climate sensor breathe through angled louvres, out of the sun and rain. A small booster in heat-shrink gives the counter its 5 V.',
         },
       },
       parts: {
         panel: 'Solar panel',
         antenna: 'LoRa antenna',
         tbeam: 'T-Beam',
-        perf: 'Perfboard',
+        boost: '5 V booster',
         pms: 'Particle counter',
         bme: 'Climate sensor',
       },

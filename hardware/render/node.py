@@ -33,7 +33,7 @@ PAL = {
     'label': '#eef1f3', 'black': '#151a1e', 'purple': '#5b2a86', 'gold': '#c9a43a', 'pcb': '#1f7a4a',
     'copper': '#c98a4b', 'panel': '#13284a', 'frame': '#b9c2c8', 'white': '#f7f9fa', 'rubber': '#2b3238',
     'red': '#c4342d', 'yellow': '#e3b62c', 'blue': '#2a63b8', 'green': '#2f8f57', 'orange': '#e07b26',
-    'cell': '#2d6fb0', 'concrete': '#cdd5da',
+    'cell': '#2d6fb0', 'concrete': '#cdd5da', 'shrink': '#9fd3e6',
 }
 MATS = {}
 
@@ -41,7 +41,7 @@ MATS = {}
 def mat(name):
     if name not in MATS:
         m = bpy.data.materials.new(name)
-        m.diffuse_color = (*hexc(PAL[name]), 1)
+        m.diffuse_color = (*hexc(PAL[name]), 0.35 if name == 'shrink' else 1)
         MATS[name] = m
     return MATS[name]
 
@@ -171,12 +171,16 @@ def world_bbox(objs):
 
 
 # ----------------------------------------------------------------- dimensions
-BW, BD = 170.0, 110.0         # outer footprint of the printed box
+BW, BD = 112.0, 84.0          # outer footprint of the printed box (no perfboard)
 T = 2.4                       # wall thickness
 LH = 36.0                     # lower (sensor) room height, floor to divider underside
 DZ = LH                       # divider bottom
 TOPF = DZ + T                 # top-room floor (divider top)
 UH1 = 92.0                    # top of the walls
+PMS_X, PMS_Y = -24.0, -17.0   # PMS7003 centre: inlet towards the front louvres
+BME_X, BME_Y = 38.0, 14.0     # BME280 on its post, away from the fan
+BOOST = (16.0, -22.0)         # MiniBoost in heat-shrink, on the sensor-room floor
+GROM = (-38.0, -24.0)         # grommet in the divider, in front of the T-Beam
 LID = 4.0
 TILT = math.radians(30)
 
@@ -197,7 +201,7 @@ def build(shots_pole=True):
     group('panel', (0, 0, 220))
     group('tbeam', (0, 0, 85))
     group('antenna', (60, 0, 85))
-    group('perf', (0, 0, 50))
+    group('boost', (0, 0, -35))
     group('pms', (0, 0, -60))
     group('bme', (0, 0, -60))
     group('gland', (0, -60, 0))
@@ -219,21 +223,21 @@ def build(shots_pole=True):
             box('lower', (1.6, BD - 12, 6.5), (sx * (BW / 2 - 3.0), 0, z), 'shell',
                 rot=(0, math.radians(35 * sx), 0))
     # sensor mounts on the lower floor
-    for x in (-62, -28):
-        for y in (-12, 14):
+    for x in (PMS_X - 17, PMS_X + 17):
+        for y in (PMS_Y - 13, PMS_Y + 13):
             box('lower', (5, 5, 2.6), (x, y, 4.3), 'shell_d')       # PMS7003 feet
-    cyl('lower', 3, 9.8, (52, 6, 3 + 4.9), 'shell_d')              # BME280 post
+    cyl('lower', 3, 9.8, (BME_X, BME_Y, 3 + 4.9), 'shell_d')         # BME280 post
 
     # upper shell: divider (with grommet hole), walls, posts, back plate
     div = box('upper', (BW, BD, T), (0, 0, DZ + T / 2), 'shell')
-    hole(div, (-52, 44, DZ + T / 2), 5.5, 'z')
+    hole(div, (GROM[0], GROM[1], DZ + T / 2), 5.5, 'z')
     h = UH1 - TOPF
     front = box('upper', (BW, T, h), (0, -BD / 2 + T / 2, TOPF + h / 2), 'shell')
     box('upper', (BW, T, h), (0, BD / 2 - T / 2, TOPF + h / 2), 'shell')
     box('upper', (T, BD - 2 * T, h), (-BW / 2 + T / 2, 0, TOPF + h / 2), 'shell')
     right = box('upper', (T, BD - 2 * T, h), (BW / 2 - T / 2, 0, TOPF + h / 2), 'shell')
     # brand badge on the front: a teal tile with the three air lines of the mark
-    bxb, bzb = -48, TOPF + (UH1 - TOPF) / 2
+    bxb, bzb = -BW / 2 + 19, TOPF + (UH1 - TOPF) / 2
     box('upper', (24, 1.0, 24), (bxb, -BD / 2 - 0.5, bzb), 'teal', bevel=0.4)
     for dz, w_ in ((5, 12), (0, 15), (-5, 9)):
         box('upper', (w_, 0.4, 1.8), (bxb - 1.5 + (w_ - 15) / 2, -BD / 2 - 1.2, bzb + dz), 'white')
@@ -257,7 +261,7 @@ def build(shots_pole=True):
     lo, _ = world_bbox(new)
     # place: PCB end 1.5 mm inside the right wall, holder 1 mm above the floor
     xc = BW / 2 - T - 1.5 - (mx.x - mn.x) / 2
-    yc = 4.0
+    yc = 16.0
     zb = TOPF + 1.0
     w.location = (xc - (mn.x + mx.x) / 2, yc - (mn.y + mx.y) / 2, zb - lo.z)
     bpy.context.view_layer.update()
@@ -285,11 +289,15 @@ def build(shots_pole=True):
         for sy in (-1, 1):
             hp = pcb_bot - TOPF - 0.2
             cyl('upper', 2.6, hp, (xc + sx * 46.5, yc + sy * 16.5, TOPF + hp / 2), 'shell_d', verts=24)
-    # 6-pin male header on the T-Beam, near the perfboard end of its back edge
-    for i in range(6):
-        x = xc - 44 + i * 2.54
-        box('tbeam', (0.64, 0.64, 8), (x, yc + 17.8, pcb_top + 3), 'gold')
-    box('tbeam', (6 * 2.54, 2.5, 2.5), (xc - 44 + 2.5 * 2.54, yc + 17.8, pcb_top + 1.25 + 0.05), 'black')
+    # header pins used (V1.2 schematic): back edge 3V3 GND 22 21 3V3, front edge GND 13 14
+    TB['hdr_back'] = []
+    TB['hdr_front'] = []
+    for row, n, y in (('hdr_back', 5, yc + 17.8), ('hdr_front', 3, yc - 17.8)):
+        for i in range(n):
+            x = xc - 44 + i * 2.54
+            box('tbeam', (0.64, 0.64, 8), (x, y, pcb_top + 3), 'gold')
+            TB[row].append(Vector((x, y, pcb_top + 7.2)))
+        box('tbeam', (n * 2.54, 2.5, 2.5), (xc - 44 + (n - 1) / 2 * 2.54, y, pcb_top + 1.25 + 0.05), 'black')
 
     # ---------------- antenna: through a hole in the right wall, bent up -----
     hole(right, (BW / 2 - T / 2, TB['sma'].y, TB['sma'].z), 5.4, 'x')
@@ -299,29 +307,8 @@ def build(shots_pole=True):
     sphere('antenna', 4.6, pivot + Vector((0, 0, 52)), 'black')
     TB['ant_top'] = pivot + Vector((0, 0, 56))
 
-    # ---------------- perfboard carrier -----------------
-    PX0, PX1 = -BW / 2 + T + 3, -BW / 2 + T + 3 + 40   # 40 x 60 mm board (standard 4 x 6 cm)
-    PY0, PY1 = -30, 30
-    pz = TOPF + 8
-    pcx, pcy = (PX0 + PX1) / 2, (PY0 + PY1) / 2
-    for sx in (PX0 + 3, PX1 - 3):
-        for sy in (PY0 + 3, PY1 - 3):
-            cyl('upper', 2.6, 8 - 0.2, (sx, sy, TOPF + (8 - 0.2) / 2), 'shell_d', verts=24)
-    box('perf', (40, 60, 1.6), (pcx, pcy, pz + 0.8), 'pcb')
-    me = bpy.data.meshes.new('pads')
-    bm = bmesh.new()
-    for i in range(15):
-        for j in range(23):
-            r = bmesh.ops.create_circle(bm, cap_ends=True, radius=0.7, segments=8)
-            for v in r['verts']:
-                v.co += Vector((PX0 + 2.22 + i * 2.54, PY0 + 2.06 + j * 2.54, pz + 1.62))
-    bm.to_mesh(me)
-    o = bpy.data.objects.new('pads', me)
-    bpy.context.scene.collection.objects.link(o)
-    _finish(o, 'copper', 'perf')
-    top = pz + 1.6
-    # MiniBoost (Adafruit CAD) on its pins
-    bw_, bnew = import_glb(os.path.join(CAD, 'boost.glb'), 'perf')
+    # ---------------- MiniBoost (Adafruit CAD) in clear heat-shrink -----------
+    bw_, bnew = import_glb(os.path.join(CAD, 'boost.glb'), 'boost')
     bw_.scale = (1000, 1000, 1000)
     # the STEP carries no colours: black solder mask, silver parts, like the real board
     for o in bnew:
@@ -336,32 +323,19 @@ def build(shots_pole=True):
         bw_.rotation_euler = (0, 0, 0)
         bpy.context.view_layer.update()
         bmn, bmx = world_bbox(bnew)
-    bw_.location += Vector((pcx - (bmn.x + bmx.x) / 2, PY0 + 16 - (bmn.y + bmx.y) / 2, top + 2.6 - bmn.z))
+    bw_.location += Vector((BOOST[0] - (bmn.x + bmx.x) / 2, BOOST[1] - (bmn.y + bmx.y) / 2, 3 + 1.2 - bmn.z))
     bpy.context.view_layer.update()
     bmn, bmx = world_bbox(bnew)
-    TB['boost'] = ((bmn + bmx) / 2)
+    TB['boost'] = (bmn + bmx) / 2
     TB['boost_dims'] = bmx - bmn
-    for i in range(5):  # its header pins down into the board
-        box('perf', (2.5, 2.5, 2.5), (bmn.x + 2 + i * 2.54, bmn.y + 2.0, top + 1.25), 'black')
-    # JST-XH sockets: PMS7003 (4) and BME280 (4); 6-pin header for the T-Beam link
-    def jst(x, y, n, color='white'):
-        wdt = n * 2.5 + 2.4
-        box('perf', (wdt, 5.75, 7), (x, y, top + 3.5 + 0.05), color)
-        box('perf', (wdt - 1.6, 4.0, 0.3), (x, y - 0.3, top + 7.06), 'shell_d')
-        return wdt
-    jst(pcx - 10, PY1 - 12, 4)
-    jst(pcx + 10, PY1 - 12, 4)
-    for i in range(6):
-        box('perf', (0.64, 0.64, 8), (PX1 - 6, PY1 - 26 - i * 2.54, top + 3), 'gold')
-    box('perf', (2.5, 6 * 2.54, 2.5), (PX1 - 6, PY1 - 26 - 2.5 * 2.54, top + 1.25 + 0.05), 'black')
-    TB['jst_pms'] = Vector((pcx - 10, PY1 - 12, top + 7))
-    TB['jst_bme'] = Vector((pcx + 10, PY1 - 12, top + 7))
-    TB['perf_hdr'] = [Vector((PX1 - 6, PY1 - 26 - i * 2.54, top + 7)) for i in range(6)]
-    TB['perf'] = Vector((pcx, pcy, top))
+    sh_ = box('boost', (bmx.x - bmn.x + 2, bmx.y - bmn.y + 2, bmx.z - bmn.z + 2), TB['boost'], 'shrink', bevel=0.8)
+    sh_.name = 'shrink'
+    TB['boost_in'] = Vector((TB['boost'].x, bmn.y + 1, TB['boost'].z))   # input end, towards the grommet
+    TB['boost_out'] = Vector((TB['boost'].x, bmx.y - 1, TB['boost'].z))  # output end, towards the PMS7003
 
     # ---------------- sensors in the lower room -----------------
     # PMS7003: 48 x 37 x 12 mm, inlet and outlet on the front long face
-    px, py, pz0 = -45, 1, 5.7
+    px, py, pz0 = PMS_X, PMS_Y, 5.7
     box('pms', (48, 37, 12), (px, py, pz0 + 6), 'silver', bevel=0.6)
     box('pms', (46, 35, 0.3), (px, py, pz0 + 12.16), 'label')
     for x in (-16, -6):
@@ -373,7 +347,7 @@ def build(shots_pole=True):
     TB['pms'] = Vector((px, py, pz0 + 6))
     TB['pms_conn'] = Vector((px + 14, py + 18.5 + 11, pz0 + 10.6))
     # BME280: GY-BME280 purple breakout, 15 x 11.5 mm, on a post, wires up
-    bx, by, bz = 52, 6, 3 + 9.8 + 0.1
+    bx, by, bz = BME_X, BME_Y, 3 + 9.8 + 0.1
     box('bme', (15, 11.5, 1.6), (bx, by, bz + 0.8), 'purple')
     box('bme', (2.5, 2.5, 0.9), (bx + 2, by, bz + 2.05), 'silver')
     for i in range(4):
@@ -441,23 +415,34 @@ def build(shots_pole=True):
     plug_end = Vector((TB['usb'].x, TB['usb'].y - 0.3, TB['usb'].z))
     box('cables', (9, 14, 5.5), plug_end + Vector((0, -7.3, 0)), 'black')   # micro-USB plug body
     wire('cables', [gin + Vector((0, 4, 0)), plug_end + Vector((0, -14.6, 0))], 'black', 1.6)
-    # T-Beam header -> perfboard header: six short wires
-    cols = ['red', 'black', 'yellow', 'blue', 'green', 'white']
-    for i, c in enumerate(cols):
-        a = Vector((TB['xc'] - 44 + i * 2.54, TB['yc'] + 17.8, TB['pcb_top'] + 7.2))
-        b = TB['perf_hdr'][i]
-        wire('wires', [a, a + Vector((0, 4, 8)), (a + b) / 2 + Vector((0, 6, 16)), b + Vector((3, 0, 8)), b + Vector((0, 0, 0.2))], c, 0.45)
-    # perfboard JSTs -> through the grommet -> sensors
-    g = Vector((-52, 44, DZ + T / 2))
-    for i, c in enumerate(['red', 'black', 'yellow', 'blue']):
-        o = Vector(((i - 1.5) * 1.1, (i - 1.5) * 0.4, 0))
-        a = TB['jst_pms'] + Vector(((i - 1.5) * 2.5, 0, 0.2))
-        wire('wires', [a, a + Vector((0, 4, 6)), g + o + Vector((2, 0, 10)), g + o, g + o + Vector((0, 0, -10)),
-                       TB['pms_conn'] + Vector(((i - 1.5) * 2.54, 4, 2)), TB['pms_conn'] + Vector(((i - 1.5) * 2.54, 0, 0))], c, 0.45)
-        b = TB['jst_bme'] + Vector(((i - 1.5) * 2.5, 0, 0.2))
-        t = TB['bme'] + Vector((-6, -3.8 + i * 2.54, 0.15))
-        wire('wires', [b, b + Vector((0, 5, 6)), g + o + Vector((-2, 1, 12)), g + o + Vector((0, 0.8, 0)),
-                       g + o + Vector((20, 0, -14)), Vector((20, 20, 24)) + o, t + Vector((-10, 0, 6)), t], c, 0.45)
+    # T-Beam header -> grommet -> sensors. Back-edge wires arc over the board.
+    g = Vector((GROM[0], GROM[1], DZ + T / 2))
+
+    def through(a, k, n, to, col, up=6):
+        o = Vector(((k - (n - 1) / 2) * 0.95, ((k % 2) - 0.5) * 1.0, 0))
+        top = max(a.z, TB['pcb_top'] + 8) + up
+        wire('wires', [a, a + Vector((0, 0, 6)), Vector((a.x - 2, (a.y + g.y) / 2, top)), g + o + Vector((0, 0, 12)),
+                       g + o, g + o + Vector((0, 0, -8)), Vector((to.x, to.y, 26)) + o * 0.5, to + Vector((0, 0, 5)), to], col, 0.45)
+    hb, hf = TB['hdr_back'], TB['hdr_front']
+    pc = TB['pms_conn']
+    bt = [TB['bme'] + Vector((-6, -3.8 + i * 2.54, 0.15)) for i in range(4)]
+    bi, bo = TB['boost_in'], TB['boost_out']
+    # BME280: 3V3, GND, SDA 21, SCL 22
+    through(hb[0], 0, 9, bt[0], 'red')
+    through(hb[1], 1, 9, bt[1], 'black')
+    through(hb[3], 2, 9, bt[2], 'yellow')
+    through(hb[2], 3, 9, bt[3], 'blue')
+    # MiniBoost input: second 3V3 and GND (front edge)
+    through(hb[4], 4, 9, bi + Vector((-2, 0, 0)), 'red')
+    through(hf[0], 5, 9, bi + Vector((2, 0, 0)), 'black', up=2)
+    # PMS7003 data: TX -> 13, RX <- 14
+    through(hf[1], 6, 9, pc + Vector((1.27, 0, 0)), 'green', up=2)
+    through(hf[2], 7, 9, pc + Vector((3.81, 0, 0)), 'white', up=2)
+    # MiniBoost output -> PMS7003 VCC and GND
+    for dx, col in ((-2, 'red'), (2, 'black')):
+        a = bo + Vector((dx, 0, 0))
+        b = pc + Vector((-3.81 if col == 'red' else -1.27, 0, 0))
+        wire('wires', [a, a + Vector((0, 6, 3)), Vector((b.x, b.y - 8, 22)), b + Vector((0, 0, 4)), b], col, 0.45)
     return TB
 
 
@@ -595,10 +580,10 @@ ALLOW = {
     ('upper', 'lid'),              # lid lip inside the walls
     ('upper', 'gland'),            # gland through its hole
     ('upper', 'mount'),            # brackets around the pole clamp
-    ('upper', 'perf'),             # board on its posts
+    ('lower', 'boost'),            # booster taped to the sensor-room floor
     ('panel', 'lid'),              # brackets touch the panel underside
     ('cables', 'panel'), ('cables', 'gland'), ('cables', 'tbeam'),   # lead into the junction box, gland, USB
-    ('wires', 'tbeam'), ('wires', 'perf'), ('wires', 'pms'), ('wires', 'bme'),  # wire ends at their pins
+    ('wires', 'tbeam'), ('wires', 'boost'), ('wires', 'pms'), ('wires', 'bme'),  # wire ends at their pins
     ('antenna', 'tbeam'),          # antenna screwed onto the T-Beam's SMA jack
     ('lower', 'pms'), ('lower', 'bme'),   # sensors on their feet / post
 }
@@ -640,7 +625,7 @@ def job_check():
         if a in GROUPS and b in GROUPS:
             for row in detail(a, b):
                 print('ALLOWED', a, b, json.dumps(row))
-    print('TB', json.dumps({k: (list(v) if isinstance(v, Vector) else v) for k, v in TB.items() if k != 'perf_hdr'}))
+    print('TB', json.dumps({k: (list(v) if isinstance(v, Vector) else v) for k, v in TB.items() if not isinstance(v, list)}))
     # also check the whitelisted pairs only touch, by reporting their counts
     allowed = []
     bpy.context.view_layer.update()
@@ -669,7 +654,7 @@ def job_stills():
     render('exploded', {
         'panel': E('panel', TB['panel_c']), 'lid': E('lid', (BW / 2, -BD / 2, UH1 + 2)),
         'ant': E('antenna', TB['ant_top']), 'tbeam': E('tbeam', (TB['xc'] - 10, TB['yc'], TB['pcb_top'] + 4)),
-        'perf': E('perf', TB['perf']), 'boost': E('perf', TB['boost']),
+        'boost': E('boost', TB['boost']),
         'upper': E('upper', (BW / 2, -BD / 2, UH1 - 20)), 'gland': E('gland', TB['gland_out']),
         'pms': E('pms', TB['pms']), 'bme': E('bme', TB['bme']), 'lower': E('lower', (BW / 2, -BD / 2, 14)),
     })
@@ -689,17 +674,17 @@ def job_stills():
     setup((2600, 2200))
     camera((0, 0, 45), (1, -1.25, 0.95), 250)
     render('cutaway', {
-        'tbeam': (TB['xc'] - 20, TB['yc'] - 5, TB['pcb_top'] + 6), 'perf': TB['perf'] + Vector((-12, -20, 0)),
-        'boost': TB['boost'], 'jst': TB['jst_pms'], 'pms': TB['pms'] + Vector((0, -18, 0)),
-        'bme': TB['bme'], 'grommet': (-52, 44, DZ + T), 'usb': TB['usb'], 'ant': TB['ant_top'],
+        'tbeam': (TB['xc'] + 10, TB['yc'] - 5, TB['pcb_top'] + 6), 'hdr': TB['hdr_back'][2],
+        'grommet': (GROM[0], GROM[1], DZ + T), 'usb': TB['usb'], 'ant': TB['ant_top'],
     })
     # 4b the sensor room alone
     build(False); set_explode(0)
-    for k in ('upper', 'lid', 'panel', 'tbeam', 'antenna', 'perf', 'gland', 'cables', 'wires', 'mount'):
+    for k in ('upper', 'lid', 'panel', 'tbeam', 'antenna', 'gland', 'cables', 'wires', 'mount'):
         hide_group(k)
     setup((2400, 1600))
     camera((0, 0, 10), (1, -1.3, 1.1), 200)
-    render('lower_room', {'pms': TB['pms'] + Vector((-10, -18, 0)), 'inlet': (-61, -17.6, 11.7),
+    render('lower_room', {'pms': TB['pms'] + Vector((-10, -18, 0)), 'inlet': (PMS_X - 16, PMS_Y - 18.6, 11.7),
+                          'boost': TB['boost'],
                           'bme': TB['bme'], 'louvre': (-BW / 2 + 2, -20, 20), 'adapter': TB['pms_conn']})
     # 5 top view of the top room (for the layout drawing)
     build(False); set_explode(0)
@@ -775,14 +760,13 @@ def fit_render(name, groups, direction=(1, -1.3, 0.9), res=(1600, 1200), pad=1.1
 def job_parts():
     build(False); set_explode(0)
     fit_render('part_tbeam', ['tbeam', 'antenna'])
-    fit_render('part_perf', ['perf'])
     fit_render('part_pms', ['pms'])
     fit_render('part_bme', ['bme'], pad=1.4)
     fit_render('part_panel', ['panel'])
     fit_render('part_gland', ['gland'], pad=1.4)
     fit_render('part_box', ['lower', 'upper', 'lid'])
     # the MiniBoost alone (Adafruit CAD)
-    cad = bpy.data.objects['perf_cad']
+    cad = bpy.data.objects['boost_cad']
     for o in bpy.data.objects:
         if o.type in ('MESH', 'CURVE'):
             p_, inside = o, False
@@ -830,7 +814,7 @@ def job_scrub(frames=60, res=(900, 900)):
         'panel': ('panel', TB['panel_c']),
         'antenna': ('antenna', TB['ant_top']),
         'tbeam': ('tbeam', Vector((TB['xc'] - 10, TB['yc'], TB['pcb_top'] + 4))),
-        'perf': ('perf', TB['perf']),
+        'boost': ('boost', TB['boost']),
         'pms': ('pms', TB['pms'] + Vector((0, -18, 0))),
         'bme': ('bme', TB['bme']),
     }
