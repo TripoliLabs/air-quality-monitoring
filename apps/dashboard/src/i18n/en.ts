@@ -243,12 +243,77 @@ export default {
       },
     },
     hardwareTitle: 'Inside a sensor node',
+    hardwareIntro:
+      'Each node is one 3D-printed box on a pole. The electronics sit in a sealed room on top; the sensors breathe in a shaded, louvred room below.',
     hardware: {
-      board: 'LILYGO T-Beam (ESP32 with LoRa radio)',
+      board: 'LILYGO T-Beam: ESP32 with LoRa radio, battery charger and one 18650 lithium cell',
       particles: 'Plantower PMS7003 laser particle counter',
       climate: 'Bosch BME280 temperature, humidity and pressure sensor',
-      power: 'Solar panel with an 18650 lithium cell',
+      power:
+        'A 5 V, 2 W solar panel; a small booster, from the T-Beam’s 3.3 V pin, gives the particle counter its 5 V',
+      carrier:
+        'No extra board: every sensor wire goes straight to its own pin on the T-Beam, through locking JST plugs',
     },
+    node: {
+      label: 'The sensor box opening into its parts as you scroll',
+      hint: 'Scroll to open the box.',
+      steps: {
+        whole: {
+          title: 'One box on a pole',
+          body: 'A 3D-printed box with the solar panel on top: a sealed room for the electronics, and a shaded room below for the sensors.',
+        },
+        top: {
+          title: 'The top room',
+          body: 'Only the T-Beam: ESP32 and LoRa radio, with its cell and charger. Its antenna screws on through the wall, and eight wires run from its pins down to the sensors.',
+        },
+        bottom: {
+          title: 'The sensor room',
+          body: 'The particle counter and the climate sensor breathe through angled louvres, out of the sun and rain. A small booster in heat-shrink gives the counter its 5 V.',
+        },
+      },
+      parts: {
+        panel: 'Solar panel',
+        antenna: 'LoRa antenna',
+        tbeam: 'T-Beam',
+        boost: '5 V booster',
+        pms: 'Particle counter',
+        bme: 'Climate sensor',
+      },
+    },
+    gateway: {
+      title: 'The gateway',
+      label: 'The Dragino DLOS8N gateway opening into its parts as you scroll',
+      hint: 'Scroll to open the gateway.',
+      intro:
+        'One gateway on a high roof hears every sensor within a few kilometres and passes their readings on. Drawn from Dragino’s enclosure drawings; the inside is not published, so it is not shown.',
+      steps: {
+        roof: {
+          title: 'On a high roof',
+          body: 'A Dragino DLOS8N on a pole, with its fibreglass antenna clamped above it on a short cable. It listens on eight channels at once.',
+        },
+        inside: {
+          title: 'Inside the shell',
+          body: 'A Semtech SX1302 radio concentrator, Wi-Fi, GPS for timing, and a 4G modem, so it needs no landline.',
+        },
+        power: {
+          title: 'Power and cables',
+          body: 'One Ethernet cable with power over it (PoE), or 12 to 24 V DC. Sealed to IP65, rated from −40 to 85 °C.',
+        },
+      },
+      parts: {
+        antenna: 'Fibreglass antenna',
+        leds: 'Status lights',
+        body: 'Radio, 4G and Wi-Fi inside',
+        cables: 'Ethernet with power',
+        mount: 'Pole mount',
+      },
+      specs: {
+        size: 'About 260 × 91 × 82 mm, IP65',
+        radio: 'SX1302, 8 channels, EU868',
+        backhaul: '4G, Ethernet or Wi-Fi to our server',
+      },
+    },
+    whitepaper: 'Read the white paper (PDF)',
     limitsTitle: 'What to keep in mind',
     limits:
       'These are low-cost sensors, not regulatory monitors. They are good at showing differences between places and times; a single reading can be off, especially in fog or very humid air.',

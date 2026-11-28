@@ -1,0 +1,119 @@
+@font-face{font-family:Readex;src:url(ReadexPro.ttf);font-weight:160 700}
+:root{--bg:#eef4f8;--surface:#fff;--sunken:#e3ecf2;--ink:#0c2231;--ink2:#3d5566;--ink3:#526b7a;--line:#d3dee6;--brand:#0a6788;--brand2:#63c7e3;--night:#07161f}
+@page{size:A4;margin:22mm 20mm 20mm 20mm;
+  @top-left{content:"Qalawun · White paper";font-family:Readex;font-size:7.5pt;color:#526b7a;font-weight:400}
+  @top-right{content:"Version 1.0 · November 2026";font-family:Readex;font-size:7.5pt;color:#526b7a}
+  @bottom-right{content:counter(page);font-family:Readex;font-size:8pt;color:#0a6788;font-weight:560}
+  @bottom-left{content:"TripoliLabs · github.com/TripoliLabs/air-quality-monitoring";font-family:Readex;font-size:7.5pt;color:#526b7a}}
+@page cover{margin:0;@top-left{content:none}@top-right{content:none}@bottom-right{content:none}@bottom-left{content:none}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Readex;font-weight:340;color:var(--ink);font-size:9.6pt;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+p{margin:0 0 9pt;text-wrap:pretty}
+b{font-weight:560}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8.5pt;background:var(--sunken);padding:0 3px;border-radius:3px}
+h2{font-weight:560;font-size:19pt;line-height:1.15;letter-spacing:-.02em;margin:4pt 0 10pt;display:flex;align-items:baseline;gap:10pt;break-after:avoid}
+h2 i{font-style:normal;color:var(--brand);font-size:12pt;font-weight:560;min-width:16pt}
+h3{font-weight:560;font-size:12pt;margin:12pt 0 6pt;break-after:avoid}
+.brk{break-before:page}
+.sec{counter-reset:none}
+sup.ref{font-size:6.5pt;color:var(--brand);font-weight:500;margin-left:1px}
+figure{margin:10pt 0 14pt;break-inside:avoid}
+figure.wide{}
+figcaption{font-size:8pt;color:var(--ink3);margin-top:6pt;line-height:1.45}
+figcaption b{color:var(--ink)}
+.small{font-size:7.8pt;color:var(--ink3);margin-top:10pt}
+
+/* cover */
+.cover{page:cover;height:297mm;width:210mm;background:var(--night);color:#fff;position:relative;overflow:hidden;padding:20mm 18mm}
+.cv-top{display:flex;align-items:center;gap:10px;font-weight:560;font-size:16pt}
+.cv-top .mark{width:34px;height:34px}
+.cv-top .ar{font-size:15pt;color:var(--brand2);margin-left:6px}
+.cv-lines{position:absolute;left:0;top:40mm;width:92mm;opacity:.5}
+.cover h1{font-weight:560;font-size:34pt;line-height:1.04;letter-spacing:-.03em;margin-top:58mm;max-width:118mm}
+.cv-sub{font-size:11.5pt;line-height:1.5;color:#b0c4d0;max-width:100mm;margin-top:8mm}
+.cv-art{position:absolute;right:-5mm;top:-4mm}
+.cv-meta{position:absolute;left:18mm;bottom:18mm;font-size:9pt;color:#8ca5b3;line-height:1.6}
+.cv-meta b{color:#fff}
+
+/* summary */
+.abstract{background:var(--bg);border-radius:12px;padding:14pt 16pt 6pt;margin-bottom:12pt}
+h2.nonum{margin-top:0}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:8pt;margin-bottom:14pt}
+.keys div{border-top:2px solid var(--brand);padding-top:6pt}
+.keys b{display:block;font-size:18pt;font-weight:560;color:var(--brand);letter-spacing:-.02em}
+.keys span{font-size:8pt;color:var(--ink2);line-height:1.35;display:block}
+.toc{list-style:none;counter-reset:t}
+.toc li{counter-increment:t;display:flex;gap:8pt;padding:4pt 0;border-bottom:1px solid var(--line);font-size:9.5pt}
+.toc li:before{content:counter(t);color:var(--brand);font-weight:560;width:16pt}
+.toc li span{flex:1}.toc li i{font-style:normal;color:var(--ink3)}
+
+/* tables */
+.tbl{width:100%;border-collapse:collapse;margin:6pt 0 12pt;font-size:8.8pt;break-inside:avoid}
+.tbl th{text-align:left;font-weight:560;color:var(--ink2);font-size:8pt;padding:5pt 8pt 5pt 0;border-bottom:1.5px solid var(--ink)}
+.tbl td{padding:5pt 8pt 5pt 0;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl td:first-child{font-weight:500;white-space:nowrap}
+.tbl.cost td:last-child{text-align:right;white-space:nowrap}
+.tbl.cost th:last-child{text-align:right}
+.tbl tr.tot td{font-weight:560;border-bottom:1.5px solid var(--ink)}
+
+/* diagrams */
+svg.diag{width:100%;height:auto;display:block;font-family:Readex}
+.diag .nd rect{fill:#fff;stroke:var(--line);stroke-width:1.2}
+.diag .nd.dk>rect{fill:var(--ink);stroke:none}
+.diag .nd.dk .t{fill:#fff}.diag .nd.dk .s{fill:#b0c4d0}
+.diag .nd.dk .in{fill:#15303f;stroke:none}
+.diag .nd.br rect{fill:var(--bg);stroke:var(--brand)}
+.diag .t{font-size:12px;font-weight:560;fill:var(--ink)}
+.diag .s{font-size:10px;fill:var(--ink2)}
+.diag .b{font-weight:560;fill:var(--brand2)}
+.diag .nd:not(.dk) .b{fill:var(--brand)}
+.diag .ar{stroke:var(--brand);stroke-width:1.8;fill:none}
+.diag .ar2{stroke:var(--ink);stroke-width:1.3;fill:none}
+.diag .dash{stroke-dasharray:5 4;stroke-width:1.3}
+.diag .al{font-size:10.5px;font-weight:560;fill:var(--ink)}
+.diag .as{font-size:9.5px;fill:var(--ink3)}
+.diag .bt{font-size:10.5px;font-weight:560;fill:#fff}.diag .bs{font-size:9px;fill:#dbe9f0}
+.diag .tk{font-size:9px;fill:var(--ink3)}
+.diag .gl{stroke:#e3ecf2}
+.diag .ld,.cfig .ld{stroke:var(--ink);stroke-width:.8;fill:none}
+
+/* callout figures */
+.cfig{position:relative;margin:0 auto}
+.cfig img{position:absolute;height:auto}
+.cfig svg.lead{position:absolute;left:0;top:0}
+.cfig .dot{fill:var(--brand)}
+.cfig .ld{stroke:var(--brand);stroke-width:.9}
+.lab{position:absolute;font-size:8pt;line-height:1.3;color:var(--ink2)}
+.lab b{display:block;font-size:9pt;color:var(--ink);font-weight:560}
+
+/* parts */
+.parts{display:grid;grid-template-columns:repeat(4,1fr);gap:8pt;margin:4pt 0 12pt}
+.pt{background:var(--bg);border-radius:10px;padding:8pt;display:flex;flex-direction:column}
+.pi{height:92px;display:flex;align-items:center;justify-content:center;margin-bottom:6pt}
+.pi img{max-height:92px;max-width:100%;object-fit:contain}
+.pt b{font-size:8.6pt;line-height:1.25;margin-bottom:3pt}
+.pt span{font-size:7.6pt;color:var(--ink2);line-height:1.35}
+
+.note{background:var(--bg);border-left:3px solid var(--brand);border-radius:0 8px 8px 0;padding:9pt 12pt;font-size:9pt;margin:6pt 0 10pt;break-inside:avoid}
+ul.pl{list-style:none;margin:0 0 10pt}
+ul.pl li{padding:5pt 0 5pt 14pt;border-bottom:1px solid var(--line);position:relative}
+ul.pl li:before{content:"";position:absolute;left:0;top:11pt;width:6px;height:6px;border-radius:50%;background:var(--brand)}
+
+.stages{display:grid;grid-template-columns:repeat(4,1fr);gap:8pt;margin:6pt 0 8pt}
+.stages div{border-top:2px solid var(--line);padding-top:6pt}
+.stages b{display:block;font-size:10pt;font-weight:560;margin:5pt 0 2pt}
+.stages p{font-size:8pt;color:var(--ink2);line-height:1.4}
+.tag{font-size:7pt;font-weight:560;padding:1pt 6pt;border-radius:20px;background:var(--sunken);color:var(--ink2)}
+.tag.done{background:#2FA35B;color:#04210F}.tag.now{background:var(--brand);color:#fff}
+.map{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.map img{display:block;width:100%}
+.map svg{position:absolute;inset:0;width:100%;height:100%}
+.map .mp{font-family:Readex;font-size:28px;font-weight:560;fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:8px}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16pt}
+ul.ok,ul.todo{list-style:none}
+ul.ok li,ul.todo li{padding:5pt 0 5pt 18pt;border-bottom:1px solid var(--line);position:relative;font-size:9pt}
+ul.ok li:before{content:"";position:absolute;left:2px;top:9pt;width:9px;height:5px;border-left:2px solid #1A7340;border-bottom:2px solid #1A7340;transform:rotate(-45deg)}
+ul.todo li:before{content:"";position:absolute;left:1px;top:8pt;width:9px;height:9px;border:1.5px solid var(--ink3);border-radius:2px}
+ol.refs{padding-left:16pt;font-size:8.2pt;color:var(--ink2)}
+ol.refs li{padding:2pt 0}
