@@ -11,7 +11,8 @@
 extern "C" {
 #endif
 
-/* Bring up the LoRa/GPS power rails + battery ADC. 0 on success, -1 on failure. */
+/* Bring up the LoRa/GPS power rails, the 3.3 V sensor rail on the header (DCDC3)
+ * and the battery ADC. 0 on success, -1 on failure. */
 int esp32_pmu_init(void);
 
 /* Battery pack voltage from the PMU's ADC, in millivolts (0 if unavailable). */
