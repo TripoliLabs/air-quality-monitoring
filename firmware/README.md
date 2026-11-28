@@ -96,6 +96,44 @@ send the command again. After a cold boot the node also sends one report, after
 its first reading, with the settings it loaded from flash. The logic lives in
 `core/aq_config.c`, so the host build and the simulator run the same decisions.
 
+## Wiring the sensors (T-Beam V1.2)
+
+No extra board is needed: the header has a pin for every sensor wire. Pin roles
+below are from LilyGO's [V1.2 schematic](https://github.com/Xinyuan-LilyGO/LilyGo-LoRa-Series/blob/master/schematic/LilyGo_TBeam_V1.2.pdf).
+The V1.2 header order differs from the widely shared V1.1 pin map (21 and 22,
+for example, are swapped), so go by the labels printed on the board.
+
+| Header | Pins (schematic order) |
+|--------|------------------------|
+| U12 | VSYS · GND · 2 · 13 · 14 · 25 · 33 · 32 · 35 · 15 · RST · 39 · 36 |
+| U14 | TX · RX · 23 · 4 · 0 · GND · 3.3 V · GND · 22 · 21 · 3.3 V · LoRa DIO2 · LoRa DIO1 |
+
+| Part | Connection |
+|------|------------|
+| BME280 | VCC → 3.3 V · GND → GND · SDA → 21 · SCL → 22 (I2C address 0x76; CSB and SDO left free) |
+| MiniBoost 5 V | IN → the other 3.3 V pin · GND → GND · OUT → PMS7003 VCC |
+| PMS7003 | VCC → MiniBoost OUT · GND → MiniBoost GND · TX → 13 · RX ← 14 (3.3 V logic) |
+
+That uses 3 GND pins (one each) and both 3.3 V pins; nothing is spliced. The
+sensors connect through 4-pin JST-XH plugs so a broken one can be swapped on the
+pole.
+
+**Power.** Both 3.3 V pins come from the AXP2101's DCDC3 rail (`VCC_2_5V` on the
+schematic). `esp32_pmu_init()` sets it to 3.3 V and switches it on at every boot,
+and logs a warning if the read-back doesn't match. The rail stays on through
+deep sleep: switching it off would leave the unpowered BME280's I2C pull-ups
+dragging the shared bus, which the PMU itself sits on, towards ground. The
+PMS7003's fan is put to sleep with a serial command between readings instead.
+
+Two pins to avoid for power:
+
+- **"5V" (VSYS)** is the PMU's system rail. It follows the battery at night and
+  rises towards the USB/panel voltage in the sun, so it is not a steady 5 V.
+- There is **no battery pin** on the header.
+
+The MiniBoost draws roughly 170 mA from the 3.3 V rail while the PMS7003's fan
+runs (about 100 mA at 5 V); to be measured on the bench.
+
 ## Running without sensors
 
 A node whose sensors have all failed, or a bench board with none wired, still
@@ -118,8 +156,9 @@ Verified on a LILYGO T-Beam V1.2 868 MHz (SX1276, AXP2101) against a Dragino
 DLOS8N gateway and ChirpStack: PMU bring-up, radio init on the default pin map,
 OTAA join, and an uplink on fPort 2 decoded by ingestion.
 
-Not yet verified on hardware: the PMS7003 UART and BME280 I2C drivers with real
-sensors attached, battery readings, deep-sleep current, session restore across
-wake cycles, and remote configuration (a downlink applied, reported on fPort 11
-and kept across a power cut). The SX1262 variant of the T-Beam needs a different radio
-class and pin map.
+Not yet verified on hardware: the sensor rail (DCDC3) on the header's 3.3 V
+pins, the PMS7003 UART and BME280 I2C drivers with real sensors attached,
+battery readings, deep-sleep current, session restore across wake cycles, and
+remote configuration (a downlink applied, reported on fPort 11 and kept across a
+power cut). The SX1262 variant of the T-Beam needs a different radio class and
+pin map.

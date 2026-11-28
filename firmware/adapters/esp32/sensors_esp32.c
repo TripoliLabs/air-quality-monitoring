@@ -61,7 +61,8 @@ static const char *TAG = "sensors";
 #define AQ_PMS_WARMUP_MS 30000
 #endif
 
-/* BME280 (I2C). The T-Beam's I2C bus (also the AXP192 PMU) is SDA=21 / SCL=22. */
+/* BME280 (I2C). The T-Beam's I2C bus (also the AXP2101 PMU) is SDA=21 / SCL=22.
+ * Powered from the header's 3.3 V pins, which esp32_pmu_init() switches on. */
 #ifndef AQ_I2C_SDA_PIN
 #define AQ_I2C_SDA_PIN 21
 #endif
