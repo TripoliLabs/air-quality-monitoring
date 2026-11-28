@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppIcon from '../components/AppIcon.vue';
+import GatewayScroll from '../components/GatewayScroll.vue';
 import NodeScroll from '../components/NodeScroll.vue';
 import PageHeader from '../components/PageHeader.vue';
 import { useAqi } from '../composables/useAqi';
@@ -15,6 +16,7 @@ const steps = ['measure', 'send', 'process', 'show'] as const;
 const built = ['solar', 'radio', 'open'] as const;
 const measures = ['pm25', 'pm10', 'temperature', 'humidity'] as const;
 const hardware = ['board', 'particles', 'climate', 'power', 'carrier'] as const;
+const gatewaySpecs = ['size', 'radio', 'backhaul'] as const;
 </script>
 
 <template>
@@ -114,6 +116,18 @@ const hardware = ['board', 'particles', 'climate', 'power', 'carrier'] as const;
             <AppIcon name="external" />
           </a>
         </div>
+      </div>
+    </section>
+
+    <section id="gateway" aria-labelledby="gateway-title" class="border-t pt-10">
+      <GatewayScroll />
+      <div class="mt-10 grid grid-cols-1 gap-x-12 gap-y-6 lg:grid-cols-2">
+        <p class="max-w-prose">{{ t('about.gateway.intro') }}</p>
+        <ul class="divide-y divide-line">
+          <li v-for="spec in gatewaySpecs" :key="spec" class="py-3 text-[0.9375rem]">
+            {{ t(`about.gateway.specs.${spec}`) }}
+          </li>
+        </ul>
       </div>
     </section>
 

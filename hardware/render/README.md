@@ -15,7 +15,7 @@ animation on the About page.
 | Solar panel | Modelled: 136 × 110 mm (typical 5 V 2 W panel; measure ours) |
 | Printed box | Our design: 112 × 84 mm footprint, sealed top room, louvred bottom room |
 | Wiring | Eight wires from the T-Beam's header pins (per the V1.2 schematic) through a grommet; the MiniBoost in clear heat-shrink in the sensor room |
-| DLOS8N gateway | Modelled: 260 × 90 × 85 mm |
+| DLOS8N gateway | Modelled from Dragino's 2D enclosure drawings (DLOS8 Enclosure-01..03): 260 mm tall, 91 × 82 mm, round front, flat back plate. Dragino publishes no 3D model or internal layout, so only the outside is drawn |
 
 The T-Beam has one LoRa antenna. LilyGO's file draws the whip twice (straight and
 folded); we drop both and draw it once, screwed on through the right wall and
@@ -34,6 +34,7 @@ python step2glb.py "4654 MiniBoost 5V.step" cad/boost.glb
 blender -b --python node.py -- cad out check          # collision check
 blender -b --python node.py -- cad out stills parts   # white paper images
 blender -b --python node.py -- cad out scrub          # 60 frames + labels.json for the website
+blender -b --python node.py -- cad out gw_check gw_stills gw_scrub   # the gateway
 ```
 
 `check` prints `COLLISIONS []` when nothing intersects. Intended contacts (a wire

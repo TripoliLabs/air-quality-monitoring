@@ -32,7 +32,7 @@ PAL = {
     'ink': '#0c2231', 'grey': '#8a9ba6', 'grey_d': '#4d606c', 'pole': '#9aa6ae', 'silver': '#c9ced2',
     'label': '#eef1f3', 'black': '#151a1e', 'purple': '#5b2a86', 'gold': '#c9a43a', 'pcb': '#1f7a4a',
     'copper': '#c98a4b', 'panel': '#13284a', 'frame': '#b9c2c8', 'white': '#f7f9fa', 'rubber': '#2b3238',
-    'red': '#c4342d', 'yellow': '#e3b62c', 'blue': '#2a63b8', 'green': '#2f8f57', 'orange': '#e07b26',
+    'red': '#c4342d', 'green_led': '#3fd07a', 'yellow': '#e3b62c', 'blue': '#2a63b8', 'green': '#2f8f57', 'orange': '#e07b26',
     'cell': '#2d6fb0', 'concrete': '#cdd5da', 'shrink': '#9fd3e6',
 }
 MATS = {}
@@ -843,6 +843,147 @@ def job_scrub(frames=60, res=(900, 900)):
     print('SCRUB', frames)
 
 
+# ================================================================== gateway
+# Dragino DLOS8N, outside only, from Dragino's enclosure drawings (DLOS8
+# Enclosure-01..03): body 260 mm tall, 91 mm wide, 82.4 mm deep; round front,
+# flat back with a mounting plate. Dragino publishes no 3D model and no internal
+# layout, so the inside is not drawn.
+GW_R, GW_D = 45.5, 82.4
+GW_BACK = GW_D - GW_R          # flat back at y = +36.9
+GW_H = 260.0
+GW_Z = (0.0, 32.0, 198.0, GW_H)  # bottom cap | body | top cap
+
+
+def gw_profile(g, z0, z1, color, grow=0.0, name='prof'):
+    r = GW_R + grow
+    h = z1 - z0
+    bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=h, location=(0, 0, z0 + h / 2), vertices=96)
+    o = bpy.context.active_object
+    o.name = name
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, GW_BACK + grow - 200, z0 + h / 2))
+    c = bpy.context.active_object
+    c.scale = (400, 400, h + 2)
+    c.hide_render = c.hide_viewport = True
+    md = o.modifiers.new('cut', 'BOOLEAN')
+    md.operation = 'INTERSECT'
+    md.object = c
+    md.solver = 'EXACT'
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.modifier_apply(modifier='cut')
+    bpy.data.objects.remove(c)
+    for p_ in o.data.polygons:
+        p_.use_smooth = False
+    return _finish(o, color, g)
+
+
+def build_gateway(mast=True):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    MATS.clear(); GROUPS.clear(); EXPLODE.clear(); WIRES.clear(); TB.clear()
+    group('gw_ant', (0, 0, 150))
+    group('gw_top', (0, 0, 80))
+    group('gw_body', (0, 0, 0))
+    group('gw_bot', (0, 0, -70))
+    group('gw_plate', (0, 70, 0))
+    group('gw_mast', (0, 70, 0))
+    z0, z1, z2, z3 = GW_Z
+    gw_profile('gw_bot', z0, z1 - 0.3, 'white')
+    gw_profile('gw_body', z1, z2 - 0.3, 'white')
+    gw_profile('gw_top', z2, z3, 'white')
+    # rib bands, as drawn near both ends
+    for z in (z0 + 8, z0 + 19):
+        gw_profile('gw_bot', z, z + 3.5, 'shell_d', grow=0.8)
+    for z in (z2 + 10, z2 + 22, z2 + 36, z2 + 48):
+        gw_profile('gw_top', z, z + 3.5, 'shell_d', grow=0.8)
+    # status LED window on the front of the top cap (8 LEDs in the drawing)
+    box('gw_top', (52, 1.0, 9), (0, -GW_R - 0.2, z2 + 29.5), 'ink', bevel=0.3)
+    for i in range(8):
+        box('gw_top', (2.2, 0.4, 2.2), (-19.25 + i * 5.5, -GW_R - 0.8, z2 + 29.5),
+            'green' if i < 3 else 'grey')
+    # N-type socket and the fibreglass antenna on top
+    cyl('gw_top', 9, 6, (0, 0, z3 + 3), 'silver', verts=6)
+    cyl('gw_ant', 7.5, 18, (0, 0, z3 + 6 + 9 + 0.2), 'silver')
+    cyl('gw_ant', 10, 420, (0, 0, z3 + 24 + 210 + 0.2), 'white')
+    sphere('gw_ant', 10, (0, 0, z3 + 24 + 420 + 0.2), 'white')
+    TB['gw_ant'] = Vector((0, 0, z3 + 300))
+    # two cable glands under the bottom cap: PoE Ethernet and DC power
+    for x in (-18, 18):
+        cyl('gw_bot', 6.5, 4, (x, 14, z0 - 2.2), 'grey_d', verts=6)
+        cyl('gw_bot', 5.5, 10, (x, 14, z0 - 9.2), 'grey_d')
+    wire('gw_bot', [Vector((-18, 14, z0 - 14)), Vector((-18, 14, z0 - 40)), Vector((-26, 26, z0 - 70))], 'ink', 3.0)
+    # mounting plate on the flat back (4 screws), bracket, pole clamps
+    box('gw_plate', (60, 6, 96), (0, GW_BACK + 3.2, 112), 'grey')
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            cyl('gw_plate', 3, 1.2, (sx * 22, GW_BACK + 6.6 + 0.2, 112 + sz * 38), 'grey_d',
+                rot=(math.radians(90), 0, 0), verts=16)
+    py = GW_BACK + 6.4 + 22 + 25
+    for z in (82, 142):
+        box('gw_plate', (40, 22, 16), (0, GW_BACK + 6.4 + 11, z), 'grey')
+        torus('gw_mast', 26.4, 1.6, (0, py, z), 'grey_d')
+    if mast:
+        cyl('gw_mast', 25, 1400, (0, py, 60), 'pole', verts=64)
+    TB['gw_top'] = Vector((GW_R * 0.7, -GW_R * 0.7, z2 + 30))
+    TB['gw_body'] = Vector((GW_R * 0.7, -GW_R * 0.7, (z1 + z2) / 2))
+    TB['gw_bot'] = Vector((0, 14, z0 - 9))
+    TB['gw_plate'] = Vector((-30, GW_BACK + 6, 112))
+    TB['gw_leds'] = Vector((0, -GW_R - 1, z2 + 29.5))
+
+
+GW_ALLOW = {('gw_top', 'gw_ant'), ('gw_plate', 'gw_mast'), ('gw_body', 'gw_plate'),
+            ('gw_top', 'gw_plate'), ('gw_bot', 'gw_plate')}
+
+
+def job_gw_check():
+    build_gateway()
+    set_explode(0)
+    bad = collisions(GW_ALLOW)
+    print('GW_COLLISIONS', json.dumps(bad))
+    for a, b, n in bad:
+        print('GW_DETAIL', a, b, json.dumps(detail(a, b)))
+
+
+def job_gw_stills():
+    build_gateway()
+    set_explode(0)
+    setup((1600, 3200))
+    camera((0, 0, 330), (1, -1.3, 0.45), 780)
+    render('gw_mast', None)
+    build_gateway(mast=False)
+    set_explode(1)
+    setup((1600, 3000))
+    camera((0, 0, 300), (1, -1.3, 0.55), 1000)
+    E = lambda k, p: Vector(p) + EXPLODE[k]
+    render('gw_exploded', {k: E(k, TB[k]) for k in ('gw_ant', 'gw_top', 'gw_body', 'gw_bot', 'gw_plate')})
+
+
+def job_gw_scrub(frames=60, res=(840, 1120)):
+    build_gateway(mast=False)
+    setup(res)
+    sc = bpy.context.scene
+    rig = bpy.data.objects.new('rig', None)
+    sc.collection.objects.link(rig)
+    cam = camera((0, 0, 0), (1, -1.3, 0.55), 520, rig)
+    pts = {'antenna': 'gw_ant', 'leds': 'gw_top', 'body': 'gw_body', 'cables': 'gw_bot', 'mount': 'gw_plate'}
+    anchor = {'antenna': TB['gw_ant'], 'leds': TB['gw_leds'], 'body': TB['gw_body'],
+              'cables': TB['gw_bot'], 'mount': TB['gw_plate']}
+    os.makedirs(os.path.join(OUT, 'gw_scrub'), exist_ok=True)
+    track = {k: [] for k in pts}
+    for i in range(frames):
+        x = i / (frames - 1)
+        set_explode(x)
+        rig.location = (0, 0, 330 + 40 * x)
+        rig.rotation_euler = (0, 0, math.radians(-12 + 24 * x))
+        cam.data.ortho_scale = 900 + 260 * x
+        bpy.context.view_layer.update()
+        for k, g in pts.items():
+            v = world_to_camera_view(sc, sc.camera, anchor[k] + EXPLODE[g] * x)
+            track[k].append([round(v.x, 4), round(1 - v.y, 4)])
+        sc.render.filepath = os.path.join(OUT, 'gw_scrub', f'g_{i:03d}.png')
+        bpy.ops.render.render(write_still=True)
+    json.dump(track, open(os.path.join(OUT, 'gw_scrub', 'labels.json'), 'w'))
+    print('GW_SCRUB', frames)
+
+
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
     for j in JOBS:
@@ -850,6 +991,12 @@ if __name__ == '__main__':
             job_check()
         elif j == 'stills':
             job_stills()
+        elif j == 'gw_check':
+            job_gw_check()
+        elif j == 'gw_stills':
+            job_gw_stills()
+        elif j == 'gw_scrub':
+            job_gw_scrub()
         elif j == 'scrub':
             job_scrub()
         elif j == 'parts':

@@ -280,6 +280,39 @@ export default {
         bme: 'Climate sensor',
       },
     },
+    gateway: {
+      title: 'The gateway',
+      label: 'The Dragino DLOS8N gateway opening into its parts as you scroll',
+      hint: 'Scroll to open the gateway.',
+      intro:
+        'One gateway on a high roof hears every sensor within a few kilometres and passes their readings on. Drawn from Dragino’s enclosure drawings; the inside is not published, so it is not shown.',
+      steps: {
+        roof: {
+          title: 'On a high roof',
+          body: 'A Dragino DLOS8N on a pole, with a fibreglass antenna on top. It listens on eight channels at once.',
+        },
+        inside: {
+          title: 'Inside the shell',
+          body: 'A Semtech SX1302 radio concentrator, Wi-Fi, GPS for timing, and a 4G modem, so it needs no landline.',
+        },
+        power: {
+          title: 'Power and cables',
+          body: 'One Ethernet cable with power over it (PoE), or 12 to 24 V DC. Sealed to IP65, rated from −40 to 85 °C.',
+        },
+      },
+      parts: {
+        antenna: 'Fibreglass antenna',
+        leds: 'Status lights',
+        body: 'Radio, 4G and Wi-Fi inside',
+        cables: 'Ethernet with power',
+        mount: 'Pole mount',
+      },
+      specs: {
+        size: 'About 260 × 91 × 82 mm, IP65',
+        radio: 'SX1302, 8 channels, EU868',
+        backhaul: '4G, Ethernet or Wi-Fi to our server',
+      },
+    },
     whitepaper: 'Read the white paper (PDF)',
     limitsTitle: 'What to keep in mind',
     limits:
