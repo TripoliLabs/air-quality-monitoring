@@ -300,21 +300,21 @@ def build(shots_pole=True):
     TB['ant_top'] = pivot + Vector((0, 0, 56))
 
     # ---------------- perfboard carrier -----------------
-    PX0, PX1 = -BW / 2 + T + 3, -BW / 2 + T + 3 + 50   # 50 x 70 mm board
-    PY0, PY1 = -35, 35
+    PX0, PX1 = -BW / 2 + T + 3, -BW / 2 + T + 3 + 40   # 40 x 60 mm board (standard 4 x 6 cm)
+    PY0, PY1 = -30, 30
     pz = TOPF + 8
     pcx, pcy = (PX0 + PX1) / 2, (PY0 + PY1) / 2
     for sx in (PX0 + 3, PX1 - 3):
         for sy in (PY0 + 3, PY1 - 3):
             cyl('upper', 2.6, 8 - 0.2, (sx, sy, TOPF + (8 - 0.2) / 2), 'shell_d', verts=24)
-    box('perf', (50, 70, 1.6), (pcx, pcy, pz + 0.8), 'pcb')
+    box('perf', (40, 60, 1.6), (pcx, pcy, pz + 0.8), 'pcb')
     me = bpy.data.meshes.new('pads')
     bm = bmesh.new()
-    for i in range(19):
-        for j in range(27):
+    for i in range(15):
+        for j in range(23):
             r = bmesh.ops.create_circle(bm, cap_ends=True, radius=0.7, segments=8)
             for v in r['verts']:
-                v.co += Vector((PX0 + 2.15 + i * 2.54, PY0 + 1.9 + j * 2.54, pz + 1.62))
+                v.co += Vector((PX0 + 2.22 + i * 2.54, PY0 + 2.06 + j * 2.54, pz + 1.62))
     bm.to_mesh(me)
     o = bpy.data.objects.new('pads', me)
     bpy.context.scene.collection.objects.link(o)
@@ -817,6 +817,48 @@ def job_parts():
     fit_render('part_gateway', ['gw'], direction=(1, -1.3, 0.5), res=(900, 1800), pad=1.05)
 
 
+def job_scrub(frames=60, res=(900, 900)):
+    """Frames for the scroll-driven explode on the website: transparent, so one set
+    serves both themes, plus each label's position in every frame."""
+    build(False)
+    setup(res)
+    sc = bpy.context.scene
+    rig = bpy.data.objects.new('rig', None)
+    sc.collection.objects.link(rig)
+    cam = camera((0, 0, 0), (1, -1.3, 0.62), 380, rig)
+    pts = {
+        'panel': ('panel', TB['panel_c']),
+        'antenna': ('antenna', TB['ant_top']),
+        'tbeam': ('tbeam', Vector((TB['xc'] - 10, TB['yc'], TB['pcb_top'] + 4))),
+        'perf': ('perf', TB['perf']),
+        'pms': ('pms', TB['pms'] + Vector((0, -18, 0))),
+        'bme': ('bme', TB['bme']),
+    }
+    os.makedirs(os.path.join(OUT, 'scrub'), exist_ok=True)
+    track = {k: [] for k in pts}
+    for i in range(frames):
+        x = i / (frames - 1)
+        set_explode(x)
+        hidden = x > 0.02
+        for o in bpy.data.objects:
+            p_ = o
+            while p_.parent and p_.parent.name not in GROUPS:
+                p_ = p_.parent
+            if p_.parent and p_.parent.name in WIRES:
+                o.hide_render = hidden
+        rig.location = (0, 0, 92 + 58 * x)
+        rig.rotation_euler = (0, 0, math.radians(-10 + 20 * x))
+        cam.data.ortho_scale = 360 + 270 * x
+        bpy.context.view_layer.update()
+        for k, (g, p) in pts.items():
+            v = world_to_camera_view(sc, sc.camera, Vector(p) + EXPLODE[g] * x)
+            track[k].append([round(v.x, 4), round(1 - v.y, 4)])
+        sc.render.filepath = os.path.join(OUT, 'scrub', f'f_{i:03d}.png')
+        bpy.ops.render.render(write_still=True)
+    json.dump(track, open(os.path.join(OUT, 'scrub', 'labels.json'), 'w'))
+    print('SCRUB', frames)
+
+
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
     for j in JOBS:
@@ -824,6 +866,8 @@ if __name__ == '__main__':
             job_check()
         elif j == 'stills':
             job_stills()
+        elif j == 'scrub':
+            job_scrub()
         elif j == 'parts':
             job_parts()
         elif j.startswith('anim'):

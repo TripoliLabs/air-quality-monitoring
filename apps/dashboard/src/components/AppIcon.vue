@@ -24,9 +24,7 @@ export type IconName =
   | 'external'
   | 'download'
   | 'sort'
-  | 'close'
-  | 'play'
-  | 'pause';
+  | 'close';
 
 const props = defineProps<{
   name: IconName;
@@ -56,8 +54,6 @@ const PATHS: Record<IconName, string> = {
   download: 'M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 19.5h14',
   sort: 'm8 9 4-4 4 4M8 15l4 4 4-4',
   close: 'M6 6l12 12M18 6 6 18',
-  play: 'M8 5.5v13l10-6.5-10-6.5Z',
-  pause: 'M9 5.5v13M15 5.5v13',
 };
 
 const path = computed(() => PATHS[props.name]);

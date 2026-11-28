@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppIcon from '../components/AppIcon.vue';
-import NodeExplode from '../components/NodeExplode.vue';
+import NodeScroll from '../components/NodeScroll.vue';
 import PageHeader from '../components/PageHeader.vue';
 import { useAqi } from '../composables/useAqi';
 import { useLocale } from '../composables/useLocale';
@@ -99,24 +99,21 @@ const hardware = ['board', 'particles', 'climate', 'power', 'carrier'] as const;
       </div>
     </section>
 
-    <section
-      id="node"
-      aria-labelledby="hardware-title"
-      class="grid grid-cols-1 items-center gap-x-12 gap-y-8 border-t pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-    >
-      <NodeExplode class="mx-auto w-full max-w-[34rem]" />
-      <div>
-        <h2 id="hardware-title" class="text-2xl">{{ t('about.hardwareTitle') }}</h2>
-        <p class="mt-3 max-w-prose">{{ t('about.hardwareIntro') }}</p>
-        <ul class="mt-3 divide-y divide-line">
-          <li v-for="part in hardware" :key="part" class="py-3 text-[0.9375rem]">
-            {{ t(`about.hardware.${part}`) }}
-          </li>
-        </ul>
-        <a :href="WHITEPAPER" target="_blank" rel="noopener" class="btn btn-quiet mt-4">
-          {{ t('about.whitepaper') }}
-          <AppIcon name="external" />
-        </a>
+    <section id="node" aria-labelledby="hardware-title" class="border-t pt-10">
+      <NodeScroll />
+      <div class="mt-10 grid grid-cols-1 gap-x-12 gap-y-6 lg:grid-cols-2">
+        <p class="max-w-prose">{{ t('about.hardwareIntro') }}</p>
+        <div>
+          <ul class="divide-y divide-line">
+            <li v-for="part in hardware" :key="part" class="py-3 text-[0.9375rem]">
+              {{ t(`about.hardware.${part}`) }}
+            </li>
+          </ul>
+          <a :href="WHITEPAPER" target="_blank" rel="noopener" class="btn btn-quiet mt-4">
+            {{ t('about.whitepaper') }}
+            <AppIcon name="external" />
+          </a>
+        </div>
       </div>
     </section>
 

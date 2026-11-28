@@ -251,14 +251,33 @@ export default {
       climate: 'Bosch BME280 temperature, humidity and pressure sensor',
       power: 'A 5 V, 2 W solar panel; a small booster gives the particle counter its 5 V',
       carrier:
-        'A perfboard that carries the booster and the sensor plugs, so every wire is soldered',
+        'A 4 × 6 cm perfboard that carries the booster and the sensor plugs, so every wire is soldered',
     },
     node: {
-      label: 'The sensor box coming apart into its parts and going back together',
-      caption:
-        "Drawn from the 3D model in our repository. The T-Beam and the booster are the makers' own CAD models.",
-      play: 'Play',
-      pause: 'Pause',
+      label: 'The sensor box opening into its parts as you scroll',
+      hint: 'Scroll to open the box.',
+      steps: {
+        whole: {
+          title: 'One box on a pole',
+          body: 'A 3D-printed box with the solar panel on top: a sealed room for the electronics, and a shaded room below for the sensors.',
+        },
+        top: {
+          title: 'The top room',
+          body: 'The T-Beam (ESP32 and LoRa radio, with its cell and charger) and a small perfboard with the 5 V booster and the sensor plugs.',
+        },
+        bottom: {
+          title: 'The sensor room',
+          body: 'The particle counter and the climate sensor breathe through angled louvres, out of the sun and rain.',
+        },
+      },
+      parts: {
+        panel: 'Solar panel',
+        antenna: 'LoRa antenna',
+        tbeam: 'T-Beam',
+        perf: 'Perfboard',
+        pms: 'Particle counter',
+        bme: 'Climate sensor',
+      },
     },
     whitepaper: 'Read the white paper (PDF)',
     limitsTitle: 'What to keep in mind',

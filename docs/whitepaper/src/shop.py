@@ -37,7 +37,7 @@ de = table([
 
 lb = table([
     ('part_cell', '18650 cells, about 3,000 mAh', 'Flat top, e.g. Samsung 30Q or LG MJ1. We have 2: buy 2 more. Trusted shop; fakes are common.', '2', 'Tripoli', 'to find', ''),
-    ('part_perf', 'Perfboard 5 × 7 cm, double-sided', 'One carrier per box, one spare. Plated holes.', '4', 'Tripoli', 'to find', ''),
+    ('part_perf', '4 × 6 cm perfboard, double-sided', 'One carrier per box, one spare. Plated holes.<sup>5</sup>', '4', 'Electroslab', '$0.32', '$1.28'),
     ('p_jst', 'JST-XH 4-pin sockets and plugs', 'Two per box (one per sensor), plus spares; with crimped leads if possible.', '8', 'Tripoli', 'to find', ''),
     ('p_header', '2.54 mm male header strip', 'Six pins on the T-Beam and six on the perfboard, per box.', '2 strips', 'Tripoli', 'to find', ''),
     ('p_heatshrink', 'Silicone wire 26 AWG and heat-shrink', 'Wires between the boards and to the sensors.', '1 set', 'Tripoli', 'to find', ''),
@@ -55,6 +55,7 @@ src = [
     ('Adafruit MiniBoost 5 V 1 A, product 4654', 'adafruit.com/product/4654'),
     ('Soldered 333058 PMS7003 adapter, Welectron', 'welectron.com/Soldered-333058-PMS7003-sensor-adapter'),
     ('BerryBase jumper wires', 'berrybase.de/en/components/prototyping/jumper-cable/'),
+    ('4*6 cm Universal PCB Prototype Board Double-Sided, Electroslab, Lebanon (seen 28 November 2026)', 'electroslab.com'),
     ('Backup if the German adapters sell out: AliExpress PMS7003 adapter with cable, about $2.40, 2 to 8 weeks', 'aliexpress.com, search “PMS7003 adapter”'),
 ]
 sl = ''.join(f'<li><b>{a}</b><span>{b}</span></li>' for a, b in src)
@@ -92,7 +93,7 @@ h3{font-size:14px;font-weight:560;margin:4px 0 8px}
 '''
 
 p1 = f'''<section class="pg"><div class="hd"><div class="brand">{MARK}<div><h1>Shopping list</h1><span>Qalawun sensor boxes · first build of three, plus the gateway</span></div></div>
-<div class="sum">UK order paid: <b>£40.30</b> · Germany: <b>about €12</b> · Lebanon: prices to find<br>28 November 2026</div></div>
+<div class="sum">UK order paid: <b>£40.30</b> · Germany: <b>about €12</b> · Lebanon: boards $1.28, the rest to find<br>28 November 2026</div></div>
 <div class="cols"><div>
 <h2>Ordered in the UK</h2><div class="sn">The Pi Hut. Paid, on its way. Prices include UK VAT.</div>{uk}
 <h2>Order in Germany</h2><div class="sn">Delivered to the visitor in Germany, then carried to Tripoli. Prices from the shops’ sites, 23 November 2026.</div>{de}

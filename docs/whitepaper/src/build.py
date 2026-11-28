@@ -184,7 +184,7 @@ def wiring():
 <rect x="206" y="84" width="182" height="28" rx="5" class="in"/><text x="216" y="103" class="s">18650 cell, 3.7 V, in its holder</text>
 <rect x="206" y="120" width="182" height="28" rx="5" class="in"/><text x="216" y="139" class="s">ESP32 + SX1276 LoRa, 868 MHz</text>
 <text x="206" y="178" class="s">header: 3.3 V · GND · 21 · 22 · 13 · 14</text></g>
-<g class="nd br"><rect x="192" y="226" width="210" height="70" rx="10"/><text x="206" y="248" class="t">Perfboard carrier, 50 × 70 mm</text>
+<g class="nd br"><rect x="192" y="226" width="210" height="70" rx="10"/><text x="206" y="248" class="t">Perfboard carrier, 4 × 6 cm</text>
 <text x="206" y="266" class="s">MiniBoost 5 V · two 4-pin JST-XH plugs</text><text x="206" y="282" class="s">six short wires to the T-Beam header</text></g>
 <path d="M297,200 V224" class="ar2" marker-end="url(#aw)"/>
 <g class="nd"><rect x="470" y="30" width="170" height="70" rx="8"/><text x="482" y="52" class="t">BME280</text><text x="482" y="69" class="s">I2C at 3.3 V</text><text x="482" y="85" class="s">SDA → 21 · SCL → 22</text></g>
@@ -318,7 +318,7 @@ out. The panel sits on four printed brackets above the lid, tilted 30° to face 
     ('part_tbeam', 200, 'LILYGO T-Beam V1.2, 868 MHz', 'ESP32, SX1276 LoRa radio, AXP2101 charger, 18650 holder, one antenna.' + ref(5)),
     ('part_pms', 150, 'Plantower PMS7003', 'Laser particle counter, 48 × 37 × 12 mm. 5 V supply, 3.3 V serial data.' + ref(6)),
     ('part_bme', 110, 'BME280 breakout', 'Bosch sensor for temperature, humidity and pressure, over I2C.' + ref(7)),
-    ('part_perf', 170, 'Perfboard carrier', '50 × 70 mm. Adafruit MiniBoost 5 V (CAD model) and two JST-XH plugs.' + ref(8)),
+    ('part_perf', 170, 'Perfboard carrier', 'Standard 4 × 6 cm, double-sided. Adafruit MiniBoost 5 V (CAD model) and two JST-XH plugs.' + ref(8)),
     ('part_cell', 170, '18650 cell, 3,000 mAh', 'One per box, in the T-Beam’s holder. Bought locally from a trusted shop.'),
     ('part_panel', 170, 'Solar panel, 5 V 2 W', 'About 136 × 110 mm, USB lead straight into the T-Beam.'),
     ('part_box', 160, 'Printed enclosure', 'About 170 × 110 × 96 mm plus brackets. PETG or ASA, light colour.'),
@@ -334,7 +334,7 @@ out. The panel sits on four printed brackets above the lid, tilted 30° to face 
 <section class="sec">
 <h3>Inside the top room</h3>
 <p>The T-Beam stands on four printed posts with its antenna end against the right wall. Its own antenna screws on
-through a hole in that wall and turns up, clear of the panel. Next to it, a 50 × 70 mm perfboard carries the MiniBoost
+through a hole in that wall and turns up, clear of the panel. Next to it, a standard 4 × 6 cm perfboard carries the MiniBoost
 and two JST-XH plugs, one per sensor. Six short soldered wires link the T-Beam's header to the perfboard. The panel's USB
 lead enters through a cable gland in the front wall, straight in line with the T-Beam's micro-USB socket.</p>
 {fig(CUTAWAY, 'The top room with the front and side walls removed.', True)}
@@ -370,13 +370,22 @@ particle counter's fan, which must run for about 30 seconds before each reading 
 <tr><td>Box uses</td><td>about {tot:.1f} Wh a day</td><td>fan about 100 mA at 5 V{ref(6)} through the booster; ESP32 about 50 mA awake</td></tr>
 <tr><td>No sun</td><td>about 4 days</td><td>3,000 mAh × 3.7 V = 11 Wh in a full cell</td></tr>
 <tr><td>Bad week</td><td>stretch the interval</td><td>set it to 10 minutes from the server: the fan's share halves</td></tr></table>
+<h3>Could a smaller panel do?</h3>
+<p>Smaller panels exist with better cells, but at this size they also give less power, and the good ones are
+6 V panels whose open-circuit voltage is above what the T-Beam accepts.</p>
+<table class="tbl"><tr><th>Panel</th><th>Size</th><th>Power</th><th>Open-circuit</th><th>Fit for us</th></tr>
+<tr><td>Ours: 5 V 2 W USB</td><td>about 136 × 110 mm</td><td>2 W</td><td>regulated 5 V USB</td><td>Yes: plugs straight in. Measure once.</td></tr>
+<tr><td>Voltaic P124, ETFE</td><td>66 × 113 mm</td><td>1.2 W</td><td>7.1 – 7.3 V</td><td>Needs a 5 V regulator, and a 10-minute interval to balance the day{ref(15)}</td></tr>
+<tr><td>Voltaic P126, ETFE</td><td>112 × 136 mm</td><td>2 W</td><td>8.7 V</td><td>Same size as ours, needs a regulator{ref(15)}</td></tr></table>
+<p>So we keep the panels we have. A box that has to be smaller can use the 1.2 W panel with a small 5 V regulator
+and a 10-minute interval, at about half the panel area; the brackets on the lid take either size.</p>
 <div class="note"><b>Before a panel touches a T-Beam.</b> The T-Beam's USB input is rated 3.9 to 6 V{ref(5)}, and its
 power chip switches the board off above 7 V.{ref(11)} Our panels are sold as 5 V, but an unloaded panel in full sun can
 read higher, so each one is measured once with a multimeter first. The firmware will also cap the charging current so a
 weak panel does not collapse under load.</div>
 </section>'''
 
-s6 = f'''<section class="sec brk">
+s6 = f'''<section class="sec">
 <h2><i>6</i>Firmware</h2>
 <p>The firmware is written in C on ESP-IDF, with RadioLib for LoRaWAN. It follows a ports-and-adapters design: the
 logic (sensor sampling, the payload codec, remote settings) lives in a portable core that builds both for the ESP32
@@ -490,7 +499,8 @@ today. The project is run by TripoliLabs volunteers. You can host a box on your 
 <li>X-Powers. AXP2101 datasheet V1.4.</li>
 <li>ChirpStack documentation. chirpstack.io/docs</li>
 <li>US EPA. <i>Technical Assistance Document for the Reporting of Daily Air Quality – the AQI</i>.</li>
-<li>OpenStreetMap contributors. Map data under the ODbL. openstreetmap.org/copyright</li></ol>
+<li>OpenStreetMap contributors. Map data under the ODbL. openstreetmap.org/copyright</li>
+<li>Voltaic Systems. Small solar panels: P124, P126 specifications. voltaicsystems.com/small-solar-panels</li></ol>
 <p class="small">All drawings in this paper are renders of our own 3D model, not photographs. Prices are estimates
 from November 2026. Power figures are estimates from datasheets until measured.</p>
 </section>'''

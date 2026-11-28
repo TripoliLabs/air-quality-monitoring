@@ -12,7 +12,7 @@ animation on the About page.
 | Adafruit MiniBoost 5 V 1 A | Adafruit's STEP (`4654 MiniBoost 5V` in [Adafruit_CAD_Parts](https://github.com/adafruit/Adafruit_CAD_Parts), MIT) |
 | PMS7003 | Modelled: 48 × 37 × 12 mm, inlet and outlet on the front face |
 | BME280 breakout | Modelled: purple 6-pin board, 15 × 11.5 mm |
-| Perfboard carrier | Modelled: 50 × 70 mm, 2.54 mm pitch, two JST-XH plugs, 6-pin header |
+| Perfboard carrier | Modelled: standard 4 × 6 cm double-sided board, 2.54 mm pitch, two JST-XH plugs, 6-pin header |
 | Solar panel | Modelled: 136 × 110 mm (typical 5 V 2 W panel; measure ours) |
 | Printed box | Our design: 170 × 110 mm footprint, sealed top room, louvred bottom room |
 | DLOS8N gateway | Modelled: 260 × 90 × 85 mm |
@@ -33,18 +33,14 @@ python step2glb.py "4654 MiniBoost 5V.step" cad/boost.glb
 
 blender -b --python node.py -- cad out check          # collision check
 blender -b --python node.py -- cad out stills parts   # white paper images
-blender -b --python node.py -- cad out anim_light anim_dark   # animation frames
+blender -b --python node.py -- cad out scrub          # 60 frames + labels.json for the website
 ```
 
 `check` prints `COLLISIONS []` when nothing intersects. Intended contacts (a wire
 ending in its plug, the lid on the walls, the gland through its hole) are listed
 in `ALLOW` and printed object by object, so they can be reviewed too.
 
-The animation frames are encoded for the website with:
-
-```bash
-ffmpeg -framerate 30 -i out/anim_light/f_%04d.png -c:v libx264 -pix_fmt yuv420p \
-  -crf 27 -preset slow -movflags +faststart -an node-light.mp4
-```
-
-The results live in `apps/dashboard/src/assets/node/`.
+`scrub` renders the box opening in 60 transparent frames and writes where each
+part's label belongs in every frame. Convert them to WebP (quality 72) and copy
+them with `labels.json` to `apps/dashboard/src/assets/node/`. The About page
+scrubs through them as the reader scrolls (`NodeScroll.vue`).
