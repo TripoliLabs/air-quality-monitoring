@@ -289,7 +289,7 @@ export default {
       steps: {
         roof: {
           title: 'On a high roof',
-          body: 'A Dragino DLOS8N on a pole, with a fibreglass antenna on top. It listens on eight channels at once.',
+          body: 'A Dragino DLOS8N on a pole, with its fibreglass antenna clamped above it on a short cable. It listens on eight channels at once.',
         },
         inside: {
           title: 'Inside the shell',

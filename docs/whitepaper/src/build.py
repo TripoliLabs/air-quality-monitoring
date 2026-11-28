@@ -324,7 +324,7 @@ out. The panel sits on four printed brackets above the lid, tilted 30° to face 
     ('part_cell', 170, '18650 cell, 3,000 mAh', 'One per box, in the T-Beam’s holder. Bought locally from a trusted shop.'),
     ('part_panel', 170, 'Solar panel, 5 V 2 W', 'About 136 × 110 mm, USB lead straight into the T-Beam.'),
     ('part_box', 160, 'Printed enclosure', 'About 112 × 84 × 96 mm plus brackets. PETG or ASA, light colour.'),
-    ('part_gateway', 60, 'Dragino DLOS8N gateway', '260 × 90 × 85 mm, outdoor, 8 channels, 4G. One covers many boxes.' + ref(9)),
+    ('part_gateway', 80, 'Dragino DLOS8N gateway', '260 × 91 × 82 mm, IP65, 8 channels, 4G. Its antenna clamps to the pole on a short cable.' + ref(9)),
 ])}
 </div>
 <table class="tbl cost"><tr><th>Cost per box (parts)</th><th>US$</th></tr>

@@ -15,7 +15,7 @@ animation on the About page.
 | Solar panel | Modelled: 136 × 110 mm (typical 5 V 2 W panel; measure ours) |
 | Printed box | Our design: 112 × 84 mm footprint, sealed top room, louvred bottom room |
 | Wiring | Eight wires from the T-Beam's header pins (per the V1.2 schematic) through a grommet; the MiniBoost in clear heat-shrink in the sensor room |
-| DLOS8N gateway | Modelled from Dragino's 2D enclosure drawings (DLOS8 Enclosure-01..03): 260 mm tall, 91 × 82 mm, round front, flat back plate. Dragino publishes no 3D model or internal layout, so only the outside is drawn |
+| DLOS8N gateway | Modelled from Dragino's 2D enclosure drawings (DLOS8 Enclosure-01..03): 260 mm tall, 91 × 82 mm, round front, flat back plate. Dragino publishes no 3D model or internal layout, so only the outside is drawn. Per Dragino's product photos, the fibreglass antenna clamps to the pole on its own and joins the gateway by a short coax into the bottom end cap |
 
 The T-Beam has one LoRa antenna. LilyGO's file draws the whip twice (straight and
 folded); we drop both and draw it once, screwed on through the right wall and

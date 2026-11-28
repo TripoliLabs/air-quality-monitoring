@@ -879,12 +879,13 @@ def gw_profile(g, z0, z1, color, grow=0.0, name='prof'):
 def build_gateway(mast=True):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     MATS.clear(); GROUPS.clear(); EXPLODE.clear(); WIRES.clear(); TB.clear()
-    group('gw_ant', (0, 0, 150))
+    group('gw_ant', (-90, 0, 120))
     group('gw_top', (0, 0, 80))
     group('gw_body', (0, 0, 0))
     group('gw_bot', (0, 0, -70))
     group('gw_plate', (0, 70, 0))
     group('gw_mast', (0, 70, 0))
+    group('gw_coax', wire=True)
     z0, z1, z2, z3 = GW_Z
     gw_profile('gw_bot', z0, z1 - 0.3, 'white')
     gw_profile('gw_body', z1, z2 - 0.3, 'white')
@@ -899,24 +900,31 @@ def build_gateway(mast=True):
     for i in range(8):
         box('gw_top', (2.2, 0.4, 2.2), (-19.25 + i * 5.5, -GW_R - 0.8, z2 + 29.5),
             'green' if i < 3 else 'grey')
-    # N-type socket and the fibreglass antenna on top
-    cyl('gw_top', 9, 6, (0, 0, z3 + 3), 'silver', verts=6)
-    cyl('gw_ant', 7.5, 18, (0, 0, z3 + 6 + 9 + 0.2), 'silver')
-    cyl('gw_ant', 10, 420, (0, 0, z3 + 24 + 210 + 0.2), 'white')
-    sphere('gw_ant', 10, (0, 0, z3 + 24 + 420 + 0.2), 'white')
-    TB['gw_ant'] = Vector((0, 0, z3 + 300))
-    # two cable glands under the bottom cap: PoE Ethernet and DC power
+    # Dragino's photos: the fibreglass antenna is separate, clamped to the same
+    # pole above the gateway, and joined by a short coax to the LoRa socket
+    # inside the bottom end cap (next to the Ethernet, USB and DC ports).
+    py = GW_BACK + 6.4 + 22 + 25
+    ax, ay, az = -42, py - 22, z3 + 70
+    box('gw_ant', (30, 14, 14), (ax + 12, py - 26.4 - 7, az + 20), 'grey')     # clamp arm to the pole
+    torus('gw_ant', 26.4, 1.6, (0, py, az + 20), 'grey_d')
+    cyl('gw_ant', 8, 40, (ax, ay, az), 'silver')                               # N-type base
+    cyl('gw_ant', 8, 330, (ax, ay, az + 20 + 165 + 0.2), 'white')
+    sphere('gw_ant', 8, (ax, ay, az + 20 + 330 + 0.2), 'white')
+    TB['gw_ant'] = Vector((ax, ay, az + 220))
+    # two cable glands in the bottom cap: PoE Ethernet, and the antenna coax
     for x in (-18, 18):
         cyl('gw_bot', 6.5, 4, (x, 14, z0 - 2.2), 'grey_d', verts=6)
         cyl('gw_bot', 5.5, 10, (x, 14, z0 - 9.2), 'grey_d')
-    wire('gw_bot', [Vector((-18, 14, z0 - 14)), Vector((-18, 14, z0 - 40)), Vector((-26, 26, z0 - 70))], 'ink', 3.0)
+    wire('gw_bot', [Vector((18, 14, z0 - 14)), Vector((18, 14, z0 - 40)), Vector((26, 26, z0 - 70))], 'ink', 3.0)
+    # antenna coax: from the antenna base, down beside the body, into the bottom cap
+    wire('gw_coax', [Vector((ax, ay, az - 20.5)), Vector((ax - 8, ay - 4, az - 60)), Vector((-60, 18, 150)),
+                     Vector((-60, 18, 30)), Vector((-36, 14, z0 - 30)), Vector((-18, 14, z0 - 14.2))], 'black', 2.2)
     # mounting plate on the flat back (4 screws), bracket, pole clamps
     box('gw_plate', (60, 6, 96), (0, GW_BACK + 3.2, 112), 'grey')
     for sx in (-1, 1):
         for sz in (-1, 1):
             cyl('gw_plate', 3, 1.2, (sx * 22, GW_BACK + 6.6 + 0.2, 112 + sz * 38), 'grey_d',
                 rot=(math.radians(90), 0, 0), verts=16)
-    py = GW_BACK + 6.4 + 22 + 25
     for z in (82, 142):
         box('gw_plate', (40, 22, 16), (0, GW_BACK + 6.4 + 11, z), 'grey')
         torus('gw_mast', 26.4, 1.6, (0, py, z), 'grey_d')
@@ -929,8 +937,8 @@ def build_gateway(mast=True):
     TB['gw_leds'] = Vector((0, -GW_R - 1, z2 + 29.5))
 
 
-GW_ALLOW = {('gw_top', 'gw_ant'), ('gw_plate', 'gw_mast'), ('gw_body', 'gw_plate'),
-            ('gw_top', 'gw_plate'), ('gw_bot', 'gw_plate')}
+GW_ALLOW = {('gw_plate', 'gw_mast'), ('gw_body', 'gw_plate'), ('gw_ant', 'gw_mast'),
+            ('gw_top', 'gw_plate'), ('gw_bot', 'gw_plate'), ('gw_coax', 'gw_ant'), ('gw_coax', 'gw_bot')}
 
 
 def job_gw_check():
@@ -948,8 +956,14 @@ def job_gw_stills():
     setup((1600, 3200))
     camera((0, 0, 330), (1, -1.3, 0.45), 780)
     render('gw_mast', None)
+    build_gateway()
+    set_explode(0)
+    setup((1000, 1800))
+    camera((0, 0, 300), (1, -1.3, 0.45), 700)
+    render('part_gateway', None)
     build_gateway(mast=False)
     set_explode(1)
+    hide_group('gw_coax')
     setup((1600, 3000))
     camera((0, 0, 300), (1, -1.3, 0.55), 1000)
     E = lambda k, p: Vector(p) + EXPLODE[k]
@@ -971,9 +985,12 @@ def job_gw_scrub(frames=60, res=(840, 1120)):
     for i in range(frames):
         x = i / (frames - 1)
         set_explode(x)
-        rig.location = (0, 0, 330 + 40 * x)
+        for o in bpy.data.objects:
+            if o.parent == GROUPS['gw_coax']:
+                o.hide_render = x > 0.02
+        rig.location = (0, 0, 300 + 30 * x)
         rig.rotation_euler = (0, 0, math.radians(-12 + 24 * x))
-        cam.data.ortho_scale = 900 + 260 * x
+        cam.data.ortho_scale = 800 + 240 * x
         bpy.context.view_layer.update()
         for k, g in pts.items():
             v = world_to_camera_view(sc, sc.camera, anchor[k] + EXPLODE[g] * x)
