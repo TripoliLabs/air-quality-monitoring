@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppIcon from '../components/AppIcon.vue';
+import NodeExplode from '../components/NodeExplode.vue';
 import PageHeader from '../components/PageHeader.vue';
 import { useAqi } from '../composables/useAqi';
 import { useLocale } from '../composables/useLocale';
@@ -8,11 +9,12 @@ import { AQI_CATEGORIES } from '../lib/aqi';
 const { t, n } = useLocale();
 const aqi = useAqi();
 const REPO = 'https://github.com/TripoliLabs/air-quality-monitoring';
+const WHITEPAPER = `${REPO}/blob/main/docs/whitepaper/qalawun-white-paper.pdf`;
 
 const steps = ['measure', 'send', 'process', 'show'] as const;
 const built = ['solar', 'radio', 'open'] as const;
 const measures = ['pm25', 'pm10', 'temperature', 'humidity'] as const;
-const hardware = ['board', 'particles', 'climate', 'power'] as const;
+const hardware = ['board', 'particles', 'climate', 'power', 'carrier'] as const;
 </script>
 
 <template>
@@ -97,16 +99,31 @@ const hardware = ['board', 'particles', 'climate', 'power'] as const;
       </div>
     </section>
 
-    <div class="grid grid-cols-1 gap-x-12 gap-y-10 border-t pt-10 lg:grid-cols-2">
-      <section aria-labelledby="hardware-title">
+    <section
+      id="node"
+      aria-labelledby="hardware-title"
+      class="grid grid-cols-1 items-center gap-x-12 gap-y-8 border-t pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+    >
+      <NodeExplode class="mx-auto w-full max-w-[34rem]" />
+      <div>
         <h2 id="hardware-title" class="text-2xl">{{ t('about.hardwareTitle') }}</h2>
+        <p class="mt-3 max-w-prose">{{ t('about.hardwareIntro') }}</p>
         <ul class="mt-3 divide-y divide-line">
-          <li v-for="part in hardware" :key="part" class="py-3">
+          <li v-for="part in hardware" :key="part" class="py-3 text-[0.9375rem]">
             {{ t(`about.hardware.${part}`) }}
           </li>
         </ul>
-        <h3 class="mt-8 text-lg">{{ t('about.limitsTitle') }}</h3>
-        <p class="mt-1.5 max-w-prose text-[0.9375rem] text-ink-2">{{ t('about.limits') }}</p>
+        <a :href="WHITEPAPER" target="_blank" rel="noopener" class="btn btn-quiet mt-4">
+          {{ t('about.whitepaper') }}
+          <AppIcon name="external" />
+        </a>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 gap-x-12 gap-y-10 border-t pt-10 lg:grid-cols-2">
+      <section aria-labelledby="limits-title">
+        <h2 id="limits-title" class="text-2xl">{{ t('about.limitsTitle') }}</h2>
+        <p class="mt-3 max-w-prose">{{ t('about.limits') }}</p>
       </section>
 
       <section aria-labelledby="contribute-title">

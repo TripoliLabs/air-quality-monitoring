@@ -243,12 +243,24 @@ export default {
       },
     },
     hardwareTitle: 'Inside a sensor node',
+    hardwareIntro:
+      'Each node is one 3D-printed box on a pole. The electronics sit in a sealed room on top; the sensors breathe in a shaded, louvred room below.',
     hardware: {
-      board: 'LILYGO T-Beam (ESP32 with LoRa radio)',
+      board: 'LILYGO T-Beam: ESP32 with LoRa radio, battery charger and one 18650 lithium cell',
       particles: 'Plantower PMS7003 laser particle counter',
       climate: 'Bosch BME280 temperature, humidity and pressure sensor',
-      power: 'Solar panel with an 18650 lithium cell',
+      power: 'A 5 V, 2 W solar panel; a small booster gives the particle counter its 5 V',
+      carrier:
+        'A perfboard that carries the booster and the sensor plugs, so every wire is soldered',
     },
+    node: {
+      label: 'The sensor box coming apart into its parts and going back together',
+      caption:
+        "Drawn from the 3D model in our repository. The T-Beam and the booster are the makers' own CAD models.",
+      play: 'Play',
+      pause: 'Pause',
+    },
+    whitepaper: 'Read the white paper (PDF)',
     limitsTitle: 'What to keep in mind',
     limits:
       'These are low-cost sensors, not regulatory monitors. They are good at showing differences between places and times; a single reading can be off, especially in fog or very humid air.',
